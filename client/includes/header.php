@@ -258,7 +258,7 @@ document.getElementById('logout-btn').addEventListener('click', function(e) {
         cancelButtonColor: '#1e8fa2'
     }).then((result) => {
         if (result.isConfirmed) {
-            fetch('/diving/logout.php', {
+            fetch('../logout.php', {
                 method: 'POST',
                 credentials: 'same-origin'
             })
@@ -272,7 +272,7 @@ document.getElementById('logout-btn').addEventListener('click', function(e) {
                     showConfirmButton: false
                 });
                 setTimeout(function() {
-                    window.location.href = '/diving/login.php';
+                    window.location.href = '../login.php';
                 }, 1500);
             });
         }
