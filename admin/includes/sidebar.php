@@ -1,7 +1,7 @@
 <!-- includes/sidebar.php -->
 <nav class="sidebar" id="sidebar">
     <div class="logo-area">
-        <img src="/diving/uploads/logo.jpeg" alt="Logo" class="sidebar-logo">
+        <img src="../uploads/logo.jpeg" alt="Logo" class="sidebar-logo">
     </div>
     <div class="sidebar-nav">
         <a href="index.php" class="<?php echo ($page == 'dashboard') ? 'active' : ''; ?>">
