@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($stmt->execute()) {
         // Send verification email using PHPMailer
-        $verify_link = "http://localhost/diving/verify_email.php?token=$token&email=" . urlencode($email);
+        $verify_link = "https://divingrurip.com/verify_email.php?token=$token&email=" . urlencode($email);
         $subject = "Verify your AquaSafe RuripPH account";
         $message = "Hi $full_name,<br><br>
             Please confirm your email address by clicking the link below:<br>
