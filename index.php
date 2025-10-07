@@ -77,7 +77,7 @@ include 'includes/header.php';
         <li style="margin: 0.2em 0; padding-left: 0.5em;">✓ Clean, safe, & guided dives</li>
         <li style="margin: 0.2em 0; padding-left: 0.5em;">✓ Gear included & expert support</li>
       </ul>
-      <a href="customer/register.php" class="btn-book" style="
+      <a href="register.php" class="btn-book" style="
           background: linear-gradient(90deg, #1e8fa2 60%, #55bde6 100%);
           color: #fff;
           border-radius: 45px;
@@ -256,19 +256,6 @@ include 'includes/header.php';
           display:flex; align-items:center; gap:10px; color:#186070; font-weight:700; font-size:1rem;
         ">
           <span class="faq-icon" style="flex:0 0 28px; height:28px; border-radius:50%; border:2px solid #1e8fa2; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#1e8fa2;">+</span>
-          <span>Can I reschedule or cancel?</span>
-        </button>
-        <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66;">
-          Yes. Eligibility and fees depend on lead time and weather policy. Manage it in your dashboard.
-        </div>
-      </div>
-
-      <div class="faq-item" style="background:#fff; border:1px solid #e8f7fb; border-radius:14px; box-shadow:0 4px 14px rgba(30,143,162,.06);">
-        <button class="faq-q" aria-expanded="false" style="
-          width:100%; text-align:left; background:transparent; border:none; padding:14px 16px; cursor:pointer;
-          display:flex; align-items:center; gap:10px; color:#186070; font-weight:700; font-size:1rem;
-        ">
-          <span class="faq-icon" style="flex:0 0 28px; height:28px; border-radius:50%; border:2px solid #1e8fa2; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#1e8fa2;">+</span>
           <span>How do refunds work?</span>
         </button>
         <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66;">
@@ -286,19 +273,6 @@ include 'includes/header.php';
         </button>
         <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66;">
           Basic water comfort helps. Beginners are welcome—just follow the coach briefing closely.
-        </div>
-      </div>
-
-      <div class="faq-item" style="background:#fff; border:1px solid #e8f7fb; border-radius:14px; box-shadow:0 4px 14px rgba(30,143,162,.06);">
-        <button class="faq-q" aria-expanded="false" style="
-          width:100%; text-align:left; background:transparent; border:none; padding:14px 16px; cursor:pointer;
-          display:flex; align-items:center; gap:10px; color:#186070; font-weight:700; font-size:1rem;
-        ">
-          <span class="faq-icon" style="flex:0 0 28px; height:28px; border-radius:50%; border:2px solid #1e8fa2; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#1e8fa2;">+</span>
-          <span>Do I need medical clearance?</span>
-        </button>
-        <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66;">
-          Recommended if you have respiratory or heart conditions. Please declare honestly for your safety.
         </div>
       </div>
 
@@ -328,23 +302,24 @@ include 'includes/header.php';
         </div>
       </div>
 
-      <div class="faq-item" style="background:#fff; border:1px solid #e8f7fb; border-radius:14px; box-shadow:0 4px 14px rgba(30,143,162,.06);">
-        <button class="faq-q" aria-expanded="false" style="
-          width:100%; text-align:left; background:transparent; border:none; padding:14px 16px; cursor:pointer;
-          display:flex; align-items:center; gap:10px; color:#186070; font-weight:700; font-size:1rem;
-        ">
-          <span class="faq-icon" style="flex:0 0 28px; height:28px; border-radius:50%; border:2px solid #1e8fa2; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#1e8fa2;">+</span>
-          <span>Is there an age limit?</span>
-        </button>
-        <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66;">
-          Minors need guardian consent; final approval depends on coach assessment.
-        </div>
-      </div>
+     <div class="faq-item" style="background:#fff; border:1px solid #e8f7fb; border-radius:14px; box-shadow:0 4px 14px rgba(30,143,162,.06);">
+  <button class="faq-q" aria-expanded="false" style="
+    width:100%; text-align:left; background:transparent; border:none; padding:14px 16px; cursor:pointer;
+    display:flex; align-items:center; gap:10px; color:#186070; font-weight:700; font-size:1rem;
+  ">
+    <span class="faq-icon" style="flex:0 0 28px; height:28px; border-radius:50%; border:2px solid #1e8fa2; display:inline-flex; align-items:center; justify-content:center; font-weight:900; color:#1e8fa2;">+</span>
+    <span>How do you comply with Republic Act 11038 (E-NIPAS)?</span>
+  </button>
+  <div class="faq-a" style="display:none; padding:0 16px 14px 54px; color:#3a5b66; line-height:1.5;">
+    Committed to environmental protection under Republic Act 11038 (E-NIPAS Act), ensuring that every dive supports marine conservation efforts in Daruanak Island.
+  </div>
+</div>
+
     </div>
 
     <!-- Footer links of FAQs -->
     <div class="faq-join" style="margin-top:16px; display:flex; justify-content:center;">
-  <a href="register.php"
+  <a href="login.php"
      class="faq-cta"
      style="
         display:inline-flex; align-items:center; gap:10px;
@@ -404,7 +379,7 @@ include 'includes/header.php';
 <section class="cta">
     <h2>Ready to Dive In?</h2>
     <div class="cta-actions">
-        <a href="customer/register.php"
+        <a href="register.php"
    style="
       display: inline-block;
       background: #198fa3;
