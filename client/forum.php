@@ -514,7 +514,7 @@ if ($st && $st->execute()) {
         <!-- Header -->
         <div class="forum-header">
           <div class="forum-title">Forum</div>
-          <div class="forum-actions">
+          <!-- <div class="forum-actions">
             <div class="forum-search">
               <i class="fa-solid fa-magnifying-glass"></i>
               <input type="text" placeholder="Search posts, tags, people…">
@@ -524,7 +524,7 @@ if ($st && $st->execute()) {
               <option>Most Commented</option><option>Unanswered</option>
               <option>Bookmarked</option>
             </select>
-          </div>
+          </div> -->
         </div>
 
         <!-- Chips row (no settings gear for client) -->
