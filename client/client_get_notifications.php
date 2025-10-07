@@ -30,7 +30,7 @@ LEFT JOIN forum_post fp
 LEFT JOIN forum_category fc
   ON (fp.category_id = fc.category_id)
 WHERE n.user_id = ?
-  AND n.type IN ('booking_status','payment_status','forum')
+ AND n.type IN ('booking_status','payment_status','forum','booking_reschedule')
 ORDER BY n.is_read ASC, n.created_at DESC
 LIMIT 20
 ";
