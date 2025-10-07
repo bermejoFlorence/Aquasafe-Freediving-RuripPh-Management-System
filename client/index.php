@@ -503,7 +503,7 @@ body{
     <div class="hc-track">
       <!-- Slide 1 -->
       <div class="hc-slide">
-        <img src="../uploads/hero/reef-1.jpeg" alt="Open water session over coral reef">
+        <img src="../uploads/hero/reef-1.jpg" alt="Open water session over coral reef">
         <div class="hc-overlay">
           <h2>Discover Breathtaking Reefs</h2>
           <p>Beginner-friendly, guided by certified coaches.</p>
@@ -834,21 +834,6 @@ document.getElementById('confirm-booking-btn').onclick = function() {
 
 </script>
 <script>
-/* =============================
-   Lightweight Carousel (no libs)
-   Markup requirements:
-   <div id="heroCarousel" class="hero-carousel">
-     <button class="hc-arrow hc-prev">…</button>
-     <div class="hc-viewport">
-       <div class="hc-track">
-         <div class="hc-slide"><img …><div class="hc-overlay">…</div></div>
-         <!-- more .hc-slide -->
-       </div>
-     </div>
-     <button class="hc-arrow hc-next">…</button>
-     <div class="hc-dots"></div>
-   </div>
-================================ */
 (function () {
   const root = document.getElementById('heroCarousel');
   if (!root) return;
