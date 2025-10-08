@@ -80,7 +80,7 @@ try{
   $mail->Host       = 'smtp.gmail.com';
   $mail->SMTPAuth   = true;
   $mail->Username   = 'markson.carino@cbsua.edu.ph';     // <-- your Gmail
-  $mail->Password   = 'YOUR_APP_PASSWORD_HERE';          // <-- replace with App Password
+  $mail->Password   = 'wzzc jkhk bejh xqoe';          // <-- replace with App Password
   $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
   $mail->Port       = 587;
 
