@@ -606,3 +606,17 @@ body {
     }
     .notif-item { font-size: 0.98em; }
 }
+/* Scrollable sidebar kapag mahaba listahan */
+.sidebar { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* Mobile slide positions */
+@media (max-width: 700px){
+  .sidebar { left: -250px; }   /* nakatago by default */
+  .sidebar.open { left: 0; }   /* lumilitaw kapag may .open */
+  .content-area { margin-left: 0; }  /* huwag itulak ang content sa mobile */
+}
+
+/* Z-index layering: sidebar above overlay */
+.sidebar { z-index: 31; }
+.sidebar-overlay { z-index: 30; }
+
