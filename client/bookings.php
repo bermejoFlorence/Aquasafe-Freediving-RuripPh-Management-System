@@ -636,7 +636,168 @@ $result = $stmt->get_result();
 .status-badge.pay-pending { background:#fff1d6; color:#a66a00; }  /* Pending verification */
 
 @media (max-width:700px){ .status-badge{ padding:7px 14px; } }
+/* inline row: note (left) + tiny button (right) */
+.gcash-inline{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin:8px 0 10px; color:#126f8d; font-size:0.95em;
+}
+.gcash-inline em{ color:#126f8d; }
 
+/* small chip button (not loud) */
+.gcash-chip{
+  display:inline-flex; align-items:center; gap:6px;
+  background:#e6f5fb; border:1px solid #c8eafd;
+  color:#177687; font-weight:700; font-size:.9em;
+  padding:6px 10px; border-radius:999px; cursor:pointer;
+}
+.gcash-chip:hover{ background:#d9f0f9; }
+
+/* when space is tight, allow wrap but keep chip right if possible */
+@media (max-width:480px){
+  .gcash-inline{ flex-wrap:wrap; }
+  .gcash-chip{ margin-left:auto; }
+}
+#gcash-info-modal.custom-modal { /* default hidden via class, hindi inline */
+  display: none;
+}
+#gcash-info-modal.custom-modal.active{
+  display: flex !important; /* para talo ang future inline styles */
+}
+/* ===== GCash overlay (fixed + dark) ===== */
+#gcash-info-modal.custom-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 11000;          /* mas mataas sa deposit (10000) */
+  display: none;           /* toggled by .active */
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.55);  /* dark backdrop */
+  padding: 16px;           /* safe gutter sa maliit na screen */
+}
+#gcash-info-modal.custom-modal.active{
+  display: flex !important;
+}
+
+/* Card look (pare-pareho sa ibang modal) */
+#gcash-info-modal .modal-content{
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  max-width: 560px;
+  width: min(92vw, 560px);
+  padding: 28px 22px;
+  position: relative;
+}
+
+/* Close X */
+#gcash-info-modal .close-btn{
+  position: absolute;
+  right: 14px;
+  top: 10px;
+  font-size: 1.6rem;
+  color: #1e8fa2;
+  cursor: pointer;
+}
+
+/* Layout ng laman */
+#gcash-info-modal .gcash-body{
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+#gcash-info-modal .qr-wrap img{
+  max-width: 260px;    /* limit sa desktop */
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Responsive: stack on mobile */
+@media (max-width: 560px){
+  #gcash-info-modal .gcash-body{
+    flex-direction: column;
+    align-items: center;
+  }
+  #gcash-info-modal .qr-wrap img{
+    max-width: 72vw;   /* laki ng QR sa phone */
+  }
+}
+
+/* optional: lock body scroll kapag may modal */
+body.modal-open { overflow: hidden; }
+/* ===== GCash overlay (dark + centered) ===== */
+#gcash-info-modal.custom-modal{
+  position: fixed; inset: 0; z-index: 11000;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.55);
+  padding: 16px;
+}
+#gcash-info-modal.custom-modal.active{ display:flex !important; }
+
+/* Card look consistent with other modals */
+#gcash-info-modal .modal-content{
+  background:#fff; border-radius:22px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  width:min(92vw, 780px); padding:28px 24px 22px; position:relative;
+}
+#gcash-info-modal .modal-title{
+  color:#1698b4; font-weight:800; font-size:1.6rem; margin:0 0 18px;
+}
+#gcash-info-modal .close-btn{
+  position:absolute; right:14px; top:10px; font-size:1.6rem;
+  color:#1e8fa2; cursor:pointer; line-height:1;
+}
+#gcash-info-modal .close-btn:hover{ color:#de3247; }
+
+/* Two-column layout */
+.gcash-grid{
+  display:grid; grid-template-columns: 1fr 1fr; gap:22px; align-items:start;
+}
+
+/* QR panel */
+.qr-pane{ text-align:center; }
+.qr-img{
+  width:100%; max-width:320px; height:auto; display:block; margin:0 auto;
+  border-radius:14px; box-shadow:0 2px 12px rgba(0,0,0,.08);
+}
+.qr-hint{
+  margin-top:10px; color:#6e8a95; font-size:.95rem;
+}
+
+/* Info panel */
+.info-pane{
+  background:#f4fbfe; border:1px solid #c8eafd; border-radius:14px;
+  padding:16px 18px;
+}
+.info-list{ margin:0; }
+.info-list dt{
+  color:#16687b; font-weight:800; letter-spacing:.2px; margin-top:8px;
+}
+.info-list dd{
+  margin:2px 0 10px; color:#0f5d6f; font-weight:700; font-size:1.05rem;
+}
+.info-list .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+/* tiny help text */
+.tiny-note{
+  margin-top:6px; font-size:.9rem; color:#5b7a86;
+}
+
+/* Close button (match palette) */
+#gcash-info-modal .modal-submit-btn.alt{
+  margin-top:16px; background:#c8eafd; color:#146b8b; font-weight:800;
+  border:none; border-radius:10px; padding:10px 0; width:100%;
+  box-shadow:0 1px 6px #b9eafc55; cursor:pointer;
+}
+#gcash-info-modal .modal-submit-btn.alt:hover{
+  filter:brightness(.97);
+}
+
+/* Responsive: stack panels on small screens */
+@media (max-width: 640px){
+  .gcash-grid{ grid-template-columns: 1fr; }
+  .qr-img{ max-width:72vw; }
+}
 
     </style>
 </head>
@@ -778,10 +939,15 @@ $result = $stmt->get_result();
     <form id="deposit-form" enctype="multipart/form-data" autocomplete="off">
       <input type="hidden" name="booking_id" id="deposit-booking-id" />
 
-      <!-- GCash Note -->
-      <p style="color:#126f8d;margin-bottom:5px;font-size:0.95em;">
-        <em>Note: Only GCash payment is accepted.</em>
-      </p>
+      <div class="gcash-inline">
+  <em>Note: Only GCash payment is accepted.</em>
+
+  <button type="button" id="open-gcash-info" class="gcash-chip">
+    <i class="fa fa-qrcode" aria-hidden="true" style="margin-right:6px;"></i>
+    View QR
+  </button>
+</div>
+
 
       <div class="modal-group">
         <label>Downpayment Amount (₱)</label>
@@ -866,231 +1032,254 @@ $result = $stmt->get_result();
     <button class="modal-submit-btn" id="vb-close-btn">Close</button>
   </div>
 </div>
+<div id="gcash-info-modal" class="custom-modal" aria-hidden="true">
+  <div class="modal-content gcash-card">
+    <span class="close-btn" id="close-gcash-info">&times;</span>
+    <h2 class="modal-title">GCash Details</h2>
 
-<!-- Cancel Modal handled by SweetAlert2 only -->
+    <div class="gcash-grid">
+      <!-- QR side -->
+      <div class="qr-pane">
+        <img src="gcash.png" alt="GCash QR" class="qr-img">
+        <div class="qr-hint">Scan this QR with GCash</div>
+      </div>
+
+      <!-- Info side -->
+      <div class="info-pane">
+        <dl class="info-list">
+          <dt>Account Name</dt>
+          <dd>Markson Cariño</dd>
+
+          <dt>GCash Number</dt>
+          <dd class="mono">0992 689 9244</dd>
+        </dl>
+
+        <div class="tiny-note">
+          Tip: After sending, upload your screenshot/receipt in “Proof of Payment”.
+        </div>
+      </div>
+    </div>
+
+    <button class="modal-submit-btn alt" id="gcash-close-btn">Close</button>
+  </div>
+</div>
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebar = document.getElementById('sidebar');
-    const hamburger = document.getElementById('hamburger-btn');
-    const overlay = document.getElementById('sidebar-overlay');
+document.addEventListener('DOMContentLoaded', () => {
+  /* -------------------- helpers -------------------- */
+  const $  = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-    function openSidebar() {
-        sidebar.classList.add('open');
-        overlay.classList.add('active');
-        document.body.style.overflow = "hidden";
+  // open/close with body scroll lock
+  function openModal(modal){
+    if(!modal) return;
+    modal.classList.add('active');
+    document.body.classList.add('modal-open');
+  }
+  function closeModal(modal){
+    if(!modal) return;
+    modal.classList.remove('active');
+    // remove scroll lock only if no other modal is open
+    if (!document.querySelector('.custom-modal.active')) {
+      document.body.classList.remove('modal-open');
     }
-    function closeSidebar() {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-        document.body.style.overflow = "";
+  }
+
+  // close any open modal by pressing ESC
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $$('.custom-modal.active').forEach(closeModal);
     }
+  });
 
-    // Hamburger toggles open/close
-    if (hamburger) {
-        hamburger.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (sidebar.classList.contains('open')) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
-        });
+  // click on dark backdrop closes that specific modal
+  window.addEventListener('click', (e) => {
+    if (e.target.classList && e.target.classList.contains('custom-modal')) {
+      closeModal(e.target);
     }
-    // Overlay click closes sidebar
-    if (overlay) {
-        overlay.addEventListener('click', closeSidebar);
-    }
-    // Close sidebar on sidebar-nav link click (mobile only)
-    document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
-        link.addEventListener('click', function() {
-            if (window.innerWidth <= 700) closeSidebar();
-        });
-    });
-    // ESC key closes sidebar
-    document.addEventListener('keydown', function(e) {
-        if (e.key === "Escape" && sidebar.classList.contains('open')) {
-            closeSidebar();
-        }
-    });
-    // Auto-close sidebar if window resized to desktop
-    window.addEventListener('resize', function() {
-        if (window.innerWidth > 700) closeSidebar();
-    });
+  });
 
-});
+  /* -------------------- sidebar -------------------- */
+  const sidebar   = $('#sidebar');
+  const hamburger = $('#hamburger-btn');
+  const overlay   = $('#sidebar-overlay');
 
-const depositModal = document.getElementById('deposit-modal');
-const closeDepositModalBtn = document.getElementById('close-deposit-modal');
-const depositForm = document.getElementById('deposit-form');
+  function openSidebar(){
+    sidebar?.classList.add('open');
+    overlay?.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar(){
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('active');
+    document.body.style.overflow = '';
+  }
 
-document.querySelectorAll('.open-deposit-modal').forEach(btn => {
-    btn.addEventListener('click', function() {
-        depositModal.classList.add('active');
-        document.getElementById('deposit-booking-id').value = btn.dataset.bookingId;
-        depositForm.reset();
-        document.getElementById('proof-preview').style.display = 'none';
+  if (hamburger){
+    hamburger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
     });
-});
-closeDepositModalBtn.onclick = () => depositModal.classList.remove('active');
-window.onclick = (e) => { if (e.target === depositModal) depositModal.classList.remove('active'); };
+  }
+  overlay?.addEventListener('click', closeSidebar);
+  $$('.sidebar-nav a').forEach(a => {
+    a.addEventListener('click', () => { if (window.innerWidth <= 700) closeSidebar(); });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar?.classList.contains('open')) closeSidebar();
+  });
+  window.addEventListener('resize', () => { if (window.innerWidth > 700) closeSidebar(); });
 
-// Image preview
-document.getElementById('deposit-proof').addEventListener('change', function(){
+  /* -------------------- deposit modal -------------------- */
+  const depositModal = $('#deposit-modal');
+  const depositForm  = $('#deposit-form');
+  const closeDepositX = $('#close-deposit-modal');
+  const cancelDepositBtn = $('#cancel-deposit-btn');
+
+  $$('.open-deposit-modal').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id   = btn.getAttribute('data-booking-id');
+      const row  = document.getElementById('booking-row-' + id);
+
+      const pkg   = row?.getAttribute('data-package') || '-';
+      const date  = row?.getAttribute('data-date')    || '-';
+      const amt   = row?.getAttribute('data-amount');
+
+      $('#deposit-booking-id').value = id;
+      $('#display-package').textContent = pkg;
+      $('#display-date').textContent    = date;
+      $('#display-amount').textContent  = amt ? '₱ ' + parseFloat(amt).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
+
+      depositForm?.reset();
+      $('#proof-preview').style.display = 'none';
+      openModal(depositModal);
+    });
+  });
+
+  closeDepositX?.addEventListener('click', () => closeModal(depositModal));
+  cancelDepositBtn?.addEventListener('click', () => closeModal(depositModal));
+
+  // image preview
+  const depositProof = $('#deposit-proof');
+  depositProof?.addEventListener('change', function(){
     const file = this.files[0];
-    if (file && (file.type === "image/jpeg" || file.type === "image/png")) {
-        const reader = new FileReader();
-        reader.onload = e => {
-            document.getElementById('preview-img').src = e.target.result;
-            document.getElementById('proof-preview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+    if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        $('#preview-img').src = e.target.result;
+        $('#proof-preview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
     } else {
-        document.getElementById('proof-preview').style.display = 'none';
+      $('#proof-preview').style.display = 'none';
     }
-});
+  });
 
-// -------- Deposit Form AJAX --------
-depositForm.onsubmit = function(e){
+  // submit deposit
+  depositForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const formData = new FormData(depositForm);
-    Swal.fire({title:'Sending Payment...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
-    fetch('pay.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(r => r.json())
-    .then(data => {
-        if(data.success){
-            Swal.fire({
-  icon:'success',
-  title:'Payment Submitted',
-  text:data.msg || 'We will verify your payment.',
-  confirmButtonColor:'#1e8fa2'
-}).then(() => {
-  window.location.reload(); // 🔁 Refreshes page after user clicks OK
-});
-
-depositModal.classList.remove('active');
-
-            // Optional: Update row payment status
-            const row = document.getElementById('booking-row-'+formData.get('booking_id'));
-            if(row) row.querySelector('td[data-label="Payment Status"]').textContent = 'Pending';
+    Swal.fire({ title:'Sending Payment...', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+    fetch('pay.php', { method:'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success){
+          Swal.fire({ icon:'success', title:'Payment Submitted', text:data.msg || 'We will verify your payment.', confirmButtonColor:'#1e8fa2' })
+            .then(() => window.location.reload());
+          closeModal(depositModal);
+          const row = document.getElementById('booking-row-' + formData.get('booking_id'));
+          if (row) row.querySelector('td[data-label="Payment Status"]').textContent = 'Pending';
         } else {
-            Swal.fire({icon:'error',title:'Failed',text:data.msg||'Payment failed.',confirmButtonColor:'#1e8fa2'});
+          Swal.fire({ icon:'error', title:'Failed', text:data.msg || 'Payment failed.', confirmButtonColor:'#1e8fa2' });
         }
-    }).catch(()=>{
-        Swal.fire({icon:'error',title:'Server Error',text:'Try again later.',confirmButtonColor:'#1e8fa2'});
-    });
-};
-// Cancel button inside the modal
-document.getElementById('cancel-deposit-btn').onclick = function() {
-    depositModal.classList.remove('active');
-};
+      })
+      .catch(() => Swal.fire({ icon:'error', title:'Server Error', text:'Try again later.', confirmButtonColor:'#1e8fa2' }));
+  });
 
-// -------- Cancel Button Handler with SweetAlert2 --------
-document.querySelectorAll('.open-cancel-modal').forEach(btn => {
-    btn.addEventListener('click', function() {
-        Swal.fire({
-            title: 'Cancel this booking?',
-            text: "Are you sure? This action cannot be undone.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#e34b4b',
-            cancelButtonColor: '#1e8fa2',
-            confirmButtonText: 'Yes, cancel',
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // AJAX to cancel_booking.php
-                fetch('cancel_booking.php', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: 'booking_id=' + encodeURIComponent(btn.dataset.bookingId)
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if(data.success){
-                        Swal.fire({icon:'success',title:'Cancelled',text:data.msg||'Booking cancelled.',confirmButtonColor:'#1e8fa2'});
-                        // Optional: Update status
-                        const row = document.getElementById('booking-row-'+btn.dataset.bookingId);
-                        if(row) {
-                            row.querySelector('td[data-label="Booking Status"]').innerHTML = '<span class="status-cancelled">Cancelled</span>';
-                            row.querySelector('td[data-label="Action"]').innerHTML = '<span style="color:#bbb;">N/A</span>';
-                        }
-                    } else {
-                        Swal.fire({icon:'error',title:'Failed',text:data.msg||'Failed to cancel.',confirmButtonColor:'#1e8fa2'});
-                    }
-                }).catch(()=>{
-                    Swal.fire({icon:'error',title:'Server Error',text:'Try again later.',confirmButtonColor:'#1e8fa2'});
-                });
+  /* -------------------- cancel booking (SweetAlert2) -------------------- */
+  $$('.open-cancel-modal').forEach(btn => {
+    btn.addEventListener('click', () => {
+      Swal.fire({
+        title:'Cancel this booking?',
+        text:'Are you sure? This action cannot be undone.',
+        icon:'warning',
+        showCancelButton:true,
+        confirmButtonColor:'#e34b4b',
+        cancelButtonColor:'#1e8fa2',
+        confirmButtonText:'Yes, cancel'
+      }).then((res) => {
+        if (!res.isConfirmed) return;
+        fetch('cancel_booking.php', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+          body:'booking_id=' + encodeURIComponent(btn.dataset.bookingId)
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success){
+            Swal.fire({ icon:'success', title:'Cancelled', text:data.msg || 'Booking cancelled.', confirmButtonColor:'#1e8fa2' });
+            const row = document.getElementById('booking-row-' + btn.dataset.bookingId);
+            if (row){
+              row.querySelector('td[data-label="Booking Status"]').innerHTML = '<span class="status-badge cancelled">Cancelled</span>';
+              row.querySelector('td[data-label="Action"]').innerHTML = '<span style="color:#bbb;">N/A</span>';
             }
-        });
+          } else {
+            Swal.fire({ icon:'error', title:'Failed', text:data.msg || 'Failed to cancel.', confirmButtonColor:'#1e8fa2' });
+          }
+        })
+        .catch(() => Swal.fire({ icon:'error', title:'Server Error', text:'Try again later.', confirmButtonColor:'#1e8fa2' }));
+      });
     });
-});
-
-document.querySelectorAll('.open-deposit-modal').forEach(button => {
-  button.addEventListener('click', function() {
-    const bookingId = this.getAttribute('data-booking-id');
-    const bookingRow = document.querySelector(`#booking-row-${bookingId}`);
-
-    const packageName = bookingRow.getAttribute('data-package'); // Set this attribute via PHP
-    const bookingDate = bookingRow.getAttribute('data-date');
-    const amount = bookingRow.getAttribute('data-amount');
-
-    // Set display fields
-    document.getElementById('deposit-booking-id').value = bookingId;
-    document.getElementById('display-package').textContent = packageName || '-';
-    document.getElementById('display-date').textContent = bookingDate || '-';
-    document.getElementById('display-amount').textContent = amount ? '₱ ' + parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits: 2}) : '-';
-
-    // Show modal
-    depositModal.classList.add('active');
   });
-});
 
-const viewDetailsModal = document.getElementById('view-details-modal');
-const closeViewDetailsBtn = document.getElementById('close-view-details-modal');
-const closeViewBtn = document.getElementById('close-view-btn');
+  /* -------------------- view details modal -------------------- */
+  const viewDetailsModal = $('#view-details-modal');
+  $('#close-view-details-modal')?.addEventListener('click', () => closeModal(viewDetailsModal));
+  $('#close-view-btn')?.addEventListener('click', () => closeModal(viewDetailsModal));
 
-// Open modal when button is clicked
-document.querySelectorAll('.open-view-modal').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.getElementById('view-package').textContent = this.dataset.package || '-';
-        document.getElementById('view-amount').textContent = this.dataset.amount ? '₱ ' + parseFloat(this.dataset.amount).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
-        document.getElementById('view-date').textContent = this.dataset.date || '-';
-        document.getElementById('view-downpayment').textContent = this.dataset.downpayment ? '₱ ' + this.dataset.downpayment : '-';
-        document.getElementById('view-status').textContent = this.dataset.status || '-';
-
-        viewDetailsModal.classList.add('active');
+  $$('.open-view-modal').forEach(btn => {
+    btn.addEventListener('click', function(){
+      $('#view-package').textContent     = this.dataset.package || '-';
+      $('#view-amount').textContent      = this.dataset.amount ? '₱ ' + parseFloat(this.dataset.amount).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
+      $('#view-date').textContent        = this.dataset.date || '-';
+      $('#view-downpayment').textContent = this.dataset.downpayment ? '₱ ' + this.dataset.downpayment : '-';
+      $('#view-status').textContent      = this.dataset.status || '-';
+      openModal(viewDetailsModal);
     });
-});
-
-// Close modal handlers
-closeViewDetailsBtn.onclick = () => viewDetailsModal.classList.remove('active');
-closeViewBtn.onclick = () => viewDetailsModal.classList.remove('active');
-window.addEventListener('click', function(e) {
-    if (e.target === viewDetailsModal) viewDetailsModal.classList.remove('active');
-});
-
-// === VIEW BOOKING MODAL ===
-const viewBookingModal = document.getElementById('view-booking-modal');
-const closeViewBookingX = document.getElementById('close-view-booking-modal');
-const closeViewBookingBtn = document.getElementById('vb-close-btn');
-
-document.querySelectorAll('.open-view-booking-modal').forEach(btn => {
-  btn.addEventListener('click', function(){
-    document.getElementById('vb-package').textContent = this.dataset.package || '-';
-    document.getElementById('vb-amount').textContent = this.dataset.amount ? '₱ ' + parseFloat(this.dataset.amount).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
-    document.getElementById('vb-date').textContent   = this.dataset.date || '-';
-    document.getElementById('vb-paid').textContent   = this.dataset.paid ? '₱ ' + parseFloat(this.dataset.paid).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
-    document.getElementById('vb-paystatus').textContent = this.dataset.paystatus || '-';
-    document.getElementById('vb-status').textContent = this.dataset.status || '-';
-    viewBookingModal.classList.add('active');
   });
-});
-closeViewBookingX.onclick = () => viewBookingModal.classList.remove('active');
-closeViewBookingBtn.onclick = () => viewBookingModal.classList.remove('active');
-window.addEventListener('click', e => { if (e.target === viewBookingModal) viewBookingModal.classList.remove('active'); });
 
+  /* -------------------- view booking modal -------------------- */
+  const viewBookingModal = $('#view-booking-modal');
+  $('#close-view-booking-modal')?.addEventListener('click', () => closeModal(viewBookingModal));
+  $('#vb-close-btn')?.addEventListener('click', () => closeModal(viewBookingModal));
+
+  $$('.open-view-booking-modal').forEach(btn => {
+    btn.addEventListener('click', function(){
+      $('#vb-package').textContent   = this.dataset.package || '-';
+      $('#vb-amount').textContent    = this.dataset.amount ? '₱ ' + parseFloat(this.dataset.amount).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
+      $('#vb-date').textContent      = this.dataset.date || '-';
+      $('#vb-paid').textContent      = this.dataset.paid ? '₱ ' + parseFloat(this.dataset.paid).toLocaleString('en-PH', {minimumFractionDigits:2}) : '-';
+      $('#vb-paystatus').textContent = this.dataset.paystatus || '-';
+      $('#vb-status').textContent    = this.dataset.status || '-';
+      openModal(viewBookingModal);
+    });
+  });
+
+  /* -------------------- GCash QR modal -------------------- */
+  const gcashModal   = $('#gcash-info-modal');
+  const openGcashBtn = $('#open-gcash-info');
+  const closeGcashX  = $('#close-gcash-info');
+  const closeGcashBtn= $('#gcash-close-btn');
+
+  function openGcash(){ openModal(gcashModal); }
+  function closeGcash(){ closeModal(gcashModal); }
+
+  openGcashBtn?.addEventListener('click', openGcash);
+  closeGcashX?.addEventListener('click', closeGcash);
+  closeGcashBtn?.addEventListener('click', closeGcash);
+});
 </script>
+
+
 </body>
 </html>
