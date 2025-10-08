@@ -84,6 +84,13 @@
             Don’t have an account?
             <a href="register.php" style="color:#1e8fa2;font-weight:600;text-decoration:none;">Register</a>
         </div>
+        <!-- sa ilalim ng existing "Don't have an account? Register" line -->
+<div style="margin-top:10px; font-size:.95em; color:#353b40;">
+  <a href="index.php" style="color:#1e8fa2; font-weight:600; text-decoration:none;">Return Home</a>
+  &nbsp;•&nbsp;
+  <a href="forgot_password.php" style="color:#1e8fa2; font-weight:600; text-decoration:none;">Forgot password?</a>
+</div>
+
     </div>
     <script>
     // Mobile responsiveness (optional, for perfect mobile)
