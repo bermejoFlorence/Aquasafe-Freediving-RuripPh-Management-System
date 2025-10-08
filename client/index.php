@@ -484,6 +484,18 @@ body{
   object-fit: cover;
   object-position: center;
 }
+/* Left-align ONLY the feature lines (keep title & price centered) */
+.card p:not(.price){
+  justify-content: flex-start;   /* from center -> left */
+  text-align: left;
+  padding-left: 8px;             /* para hindi dikit sa gilid */
+}
+
+/* mas maaliwalas ang pagitan ng check icon at text */
+.card p:not(.price)::before{
+  margin-right: 10px;
+  margin-top: 2px;
+}
 
 </style>
 </head>
