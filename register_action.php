@@ -5,133 +5,158 @@ use PHPMailer\PHPMailer\Exception;
 require 'PHPMailer/src/Exception.php';
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
-require __DIR__.'/db_connect.php'; // adjust path if needed
+include 'db_connect.php'; // adjust path if needed
 
-// Strict errors + UTF-8
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-if (method_exists($conn,'set_charset')) { $conn->set_charset('utf8mb4'); }
-
-// CSRF
-session_start();
-if (!isset($_POST['csrf'], $_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], $_POST['csrf'])) {
-  echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script>Swal.fire({icon:"error",title:"Security check failed",text:"Invalid CSRF token."}).then(()=>history.back());</script>';
-  exit;
-}
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Helpers
-    function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-
-    // Normalize PH contact to 11-digit starting with 09
-    // Accepts: 09xxxxxxxxx, +639xxxxxxxxx, 639xxxxxxxxx, 9xxxxxxxxx
-    function normalize_ph_contact(string $raw): string {
-        $d = preg_replace('/\D+/', '', $raw);          // keep digits only
-        if (strpos($d, '639') === 0 && strlen($d) === 12) return '0'.substr($d, 2); // 639xx.. -> 09..
-        if (strpos($d, '9') === 0  && strlen($d) === 10)  return '0'.$d;            // 9xx..   -> 09..
-        if (strpos($d, '09') === 0 && strlen($d) === 11)  return $d;                // already ok
-        return $d; // fallback (still validated below)
-    }
-
-    // Get & sanitize
+    // Get & sanitize POST data
     $firstname = trim($_POST['firstname'] ?? '');
-    $lastname  = trim($_POST['lastname']  ?? '');
-    $full_name = trim($firstname . ' ' . $lastname);
-    $address   = trim($_POST['address']   ?? '');
-    $contact   = normalize_ph_contact(trim($_POST['contact'] ?? ''));   // <<< contact normalization
-    $email     = trim($_POST['email']     ?? '');
-    $password  = $_POST['password']  ?? '';
+    $lastname = trim($_POST['lastname'] ?? '');
+    $full_name = $firstname . ' ' . $lastname;
+    $address = trim($_POST['address'] ?? '');
+    $contact = trim($_POST['contact'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
     $cpassword = $_POST['cpassword'] ?? '';
-    $role      = "client";
-    $is_verified = 0;
+    $role = "client";
 
-    // Validation
+    // PHP-side validation
     $errors = [];
-    if ($firstname === '' || !preg_match('/^[a-zA-Z\s\-\'`]{1,30}$/', $firstname)) $errors[] = "Invalid first name.";
-    if ($lastname  === '' || !preg_match('/^[a-zA-Z\s\-\'`]{1,30}$/', $lastname))  $errors[] = "Invalid last name.";
-    if ($address   === '')                                                         $errors[] = "Address is required.";
-    if (!preg_match('/^09\d{9}$/', $contact))                                      $errors[] = "Contact number must be PH format (11 digits starting with 09).";
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL))                                 $errors[] = "Invalid email address.";
-    if ($password !== $cpassword)                                                   $errors[] = "Passwords do not match.";
-    if (strlen($password) < 8)                                                      $errors[] = "Password must be at least 8 characters.";
+    if (empty($firstname) || !preg_match('/^[a-zA-Z\s\-\'"]+$/', $firstname)) $errors[] = "Invalid first name.";
+    if (empty($lastname) || !preg_match('/^[a-zA-Z\s\-\'"]+$/', $lastname)) $errors[] = "Invalid last name.";
+    if (empty($address)) $errors[] = "Address is required.";
+    if (!preg_match('/^\d{11,12}$/', $contact)) $errors[] = "Contact number must be 11 to 12 digits.";
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Invalid email address.";
+    if ($password !== $cpassword) $errors[] = "Passwords do not match.";
+    if (strlen($password) < 6) $errors[] = "Password must be at least 6 characters.";
 
-    // Duplicate checks (email + contact)
-    $stmt = $conn->prepare("SELECT 
-        SUM(CASE WHEN email_address=? THEN 1 ELSE 0 END) AS e,
-        SUM(CASE WHEN contact_number=? THEN 1 ELSE 0 END) AS c
-      FROM `user`");
-    $stmt->bind_param("ss", $email, $contact);
+    // Check for duplicate email
+    $stmt = $conn->prepare("SELECT user_id FROM user WHERE email_address = ?");
+    $stmt->bind_param("s", $email);
     $stmt->execute();
-    $stmt->bind_result($dupEmail, $dupContact);
-    $stmt->fetch();
+    $stmt->store_result();
+    if ($stmt->num_rows > 0) $errors[] = "Email address already registered.";
     $stmt->close();
-    if ($dupEmail)   $errors[] = "Email address already registered.";
-    if ($dupContact) $errors[] = "Contact number already used.";
 
     if ($errors) {
-        $error_list = "<ul style='text-align:left;margin:0;padding-left:1.1em'>";
-        foreach($errors as $err) $error_list .= "<li>".h($err)."</li>";
+        $error_list = "<ul style='text-align:left;'>";
+        foreach($errors as $err) $error_list .= "<li>$err</li>";
         $error_list .= "</ul>";
-        echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Registration</title>
-              <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
-              <script>
-                Swal.fire({icon:'error',title:'Registration Error',html:`$error_list`,confirmButtonColor:'#1e8fa2'})
-                .then(()=>{ window.location = 'register.php'; });
-              </script></body></html>";
+        echo "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Registration</title>
+            <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+        </head>
+        <body>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Error',
+                html: `$error_list`,
+                confirmButtonColor: '#1e8fa2'
+            }).then(() => { window.location = 'register.php'; });
+        </script>
+        </body>
+        </html>
+        ";
+        $conn->close();
         exit;
     }
 
-    // Hash + token
+    // Hash the password
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
-    $token = bin2hex(random_bytes(32)); // 64 chars fits varchar(100)
+    $is_verified = 0;
+    $token = bin2hex(random_bytes(32)); // Secure random token
 
-    // INSERT (explicit columns + correct order)
-    $stmt = $conn->prepare("INSERT INTO `user`
-      (full_name, address, email_address, contact_number, `password`, role, is_verified, verification_token)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    // Insert into database
+    $stmt = $conn->prepare("INSERT INTO user (full_name, address, email_address, contact_number, password, role, is_verified, verification_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("ssssssis", $full_name, $address, $email, $contact, $password_hash, $role, $is_verified, $token);
-    $stmt->execute();
-    $stmt->close();
 
-    // Clear CSRF after success
-    unset($_SESSION['csrf']);
+    if ($stmt->execute()) {
+        // Send verification email using PHPMailer
+        $verify_link = "https://divingrurip.com/verify_email.php?token=$token&email=" . urlencode($email);
+        $subject = "Verify your AquaSafe RuripPH account";
+        $message = "Hi $full_name,<br><br>
+            Please confirm your email address by clicking the link below:<br>
+            <a href='$verify_link'>Verify Email</a><br><br>
+            If you did not register, please ignore this email.<br><br>
+            <b>Thank you!</b>";
 
-    // Email verification
-    $verify_link = "https://divingrurip.com/verify_email.php?token=$token&email=" . urlencode($email);
-    $subject = "Verify your AquaSafe RuripPH account";
-    $message = "Hi ".h($full_name).",<br><br>Please confirm your email address:<br>
-                <a href='$verify_link'>Verify Email</a><br><br>If you did not register, please ignore this email.<br><br><b>Thank you!</b>";
+        $mail = new PHPMailer(true);
+        try {
+            //Server settings
+            $mail->isSMTP();
+            $mail->Host       = 'smtp.gmail.com'; // Gmail SMTP
+            $mail->SMTPAuth   = true;
+            $mail->Username   = 'markson.carino@cbsua.edu.ph'; // Your Gmail
+            $mail->Password   = 'wzzc jkhk bejh xqoe';   // Your Gmail App Password
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = 587;
 
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';
-        $mail->SMTPAuth   = true;
+            //Recipients
+            $mail->setFrom('marksoncarino@cbsua.edu.ph', 'AquaSafe RuripPH');
+            $mail->addAddress($email, $full_name);
 
-        // TODO: move to env + use a real App Password
-        $mail->Username   = 'markson.carino@cbsua.edu.ph';
-        $mail->Password   = 'YOUR_APP_PASSWORD_HERE';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = 587;
+            //Content
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = $message;
 
-        // From should match Username for Gmail deliverability
-        $mail->setFrom('markson.carino@cbsua.edu.ph', 'AquaSafe RuripPH');
-        $mail->addAddress($email, $full_name);
+            $mail->send();
+            $sentMsg = "Please check your email to verify your account before logging in.";
+        } catch (Exception $e) {
+            $sentMsg = "Registration successful, but failed to send verification email. Please contact admin.<br><small>Error: {$mail->ErrorInfo}</small>";
+        }
 
-        $mail->isHTML(true);
-        $mail->Subject = $subject;
-        $mail->Body    = $message;
-
-        $mail->send();
-        $sentMsg = "Please check your email to verify your account before logging in.";
-    } catch (Exception $e) {
-        $sentMsg = "Registration successful, but failed to send verification email. Please contact admin.<br><small>Error: ".h($mail->ErrorInfo)."</small>";
+        echo "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Registration</title>
+            <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+        </head>
+        <body>
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Registration Successful!',
+                html: '" . addslashes($sentMsg) . "',
+                confirmButtonColor: '#1e8fa2'
+            }).then(() => { window.location = 'login.php'; });
+        </script>
+        </body>
+        </html>
+        ";
+    } else {
+        echo "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Registration</title>
+            <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
+        </head>
+        <body>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Failed',
+                text: 'Please try again.',
+                confirmButtonColor: '#1e8fa2'
+            }).then(() => { window.location = 'register.php'; });
+        </script>
+        </body>
+        </html>
+        ";
     }
-
-    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Registration</title>
-          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
-          <script>
-            Swal.fire({icon:'success',title:'Registration Successful!',html:'".h($sentMsg)."',confirmButtonColor:'#1e8fa2'})
-            .then(()=>{ window.location = 'login.php'; });
-          </script></body></html>";
+    $stmt->close();
+    $conn->close();
 }
+?>
