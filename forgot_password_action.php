@@ -12,67 +12,88 @@ if (method_exists($conn,'set_charset')) $conn->set_charset('utf8mb4');
 
 session_start();
 
-function swal_and_redirect($icon,$title,$html,$to){
-  $icon=json_encode($icon);$title=json_encode($title);$html=json_encode($html);$to=json_encode($to);
-  echo "<!doctype html><meta charset='utf-8'><script src='https://cdn.jsdelivr.net/npm/sweetalert2@11' defer></script>
-  <script>window.addEventListener('DOMContentLoaded',()=>{Swal.fire({icon:$icon,title:$title,html:$html,confirmButtonColor:'#1e8fa2'}).then(()=>{location=$to;});});</script>";
+/* ---------- Helper to show SweetAlert then redirect ---------- */
+function swal_and_redirect(string $icon, string $title, string $html, string $to){
+  $icon=json_encode($icon); $title=json_encode($title); $html=json_encode($html); $to=json_encode($to);
+  echo "<!doctype html><meta charset='utf-8'>
+  <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11' defer></script>
+  <script>window.addEventListener('DOMContentLoaded',function(){
+    Swal.fire({icon:$icon,title:$title,html:$html,confirmButtonColor:'#1e8fa2'})
+      .then(function(){ location=$to; });
+  });</script>";
   exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') swal_and_redirect('error','Invalid','POST only.','forgot_password.php');
+/* ---------- Guard ---------- */
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+  swal_and_redirect('error','Invalid request','POST only.','forgot_password.php');
+}
 if (!isset($_POST['csrf'], $_SESSION['fp_csrf']) || !hash_equals($_SESSION['fp_csrf'], $_POST['csrf'])) {
   swal_and_redirect('error','Security check failed','Invalid CSRF token.','forgot_password.php');
 }
 
+/* ---------- Input ---------- */
 $email = trim($_POST['email'] ?? '');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
   swal_and_redirect('error','Invalid email','Please enter a valid email address.','forgot_password.php');
 }
 
-// check if email exists
-$stmt=$conn->prepare("SELECT user_id, full_name FROM `user` WHERE email_address=?");
-$stmt->bind_param('s',$email); $stmt->execute(); $stmt->bind_result($uid,$full_name);
-$found = $stmt->fetch(); $stmt->close();
+/* ---------- Check if email exists ---------- */
+$stmt = $conn->prepare("SELECT user_id, full_name FROM `user` WHERE email_address=?");
+$stmt->bind_param('s', $email);
+$stmt->execute();
+$stmt->bind_result($uid, $full_name);
+$found = $stmt->fetch();
+$stmt->close();
 
 if (!$found) {
-  // For privacy, still show success message
-  swal_and_redirect('success','Check your email','If that email is registered, a reset link has been sent.','login.php');
+  // You asked to show an error when not registered
+  swal_and_redirect('error','Email not registered','Please use an email that is registered in the system.','forgot_password.php');
 }
 
-// create token (invalidate previous)
+/* ---------- Create token (invalidate older ones first) ---------- */
 $conn->query("DELETE FROM password_reset WHERE email='".$conn->real_escape_string($email)."'");
 
 $token = bin2hex(random_bytes(32)); // 64 chars
-$expires = date('Y-m-d H:i:s', time()+15*60); // 15 minutes
-$stmt=$conn->prepare("INSERT INTO password_reset (email, token, expires_at) VALUES (?, ?, ?)");
-$stmt->bind_param('sss',$email,$token,$expires); $stmt->execute(); $stmt->close();
 
+// Insert with MySQL time to avoid timezone drift
+$stmt = $conn->prepare("
+  INSERT INTO password_reset (email, token, expires_at)
+  VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))
+");
+$stmt->bind_param('ss', $email, $token);
+$stmt->execute();
+$stmt->close();
+
+/* ---------- Send email ---------- */
 $reset_link = "https://divingrurip.com/reset_password.php?token=$token&email=".urlencode($email);
-$subject = "Reset your AquaSafe RuripPH password";
-$message = "Hi ".htmlspecialchars($full_name ?? 'there',ENT_QUOTES).",<br><br>
+$subject    = "Reset your AquaSafe RuripPH password";
+$safe_name  = htmlspecialchars($full_name ?: 'there', ENT_QUOTES);
+$message    = "Hi {$safe_name},<br><br>
 Click the link below to reset your password (valid for 15 minutes):<br>
 <a href='$reset_link'>Reset Password</a><br><br>
 If you didn’t request this, you can ignore this email.";
 
-// send mail
 $mail = new PHPMailer(true);
 try{
   $mail->isSMTP();
-  $mail->Host='smtp.gmail.com';
-  $mail->SMTPAuth=true;
-  $mail->Username='markson.carino@cbsua.edu.ph';       // <- use your account
-  $mail->Password='wzzc jkhk bejh xqoe';            // <- app password (rotate!)
-  $mail->SMTPSecure=PHPMailer::ENCRYPTION_STARTTLS;
-  $mail->Port=587;
+  $mail->Host       = 'smtp.gmail.com';
+  $mail->SMTPAuth   = true;
+  $mail->Username   = 'markson.carino@cbsua.edu.ph';     // <-- your Gmail
+  $mail->Password   = 'YOUR_APP_PASSWORD_HERE';          // <-- replace with App Password
+  $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+  $mail->Port       = 587;
 
-  $mail->setFrom('markson.carino@cbsua.edu.ph','AquaSafe RuripPH'); // match Username
+  // For Gmail deliverability, From should match Username
+  $mail->setFrom('markson.carino@cbsua.edu.ph', 'AquaSafe RuripPH');
   $mail->addAddress($email, $full_name ?: $email);
-  $mail->isHTML(true);
-  $mail->Subject=$subject;
-  $mail->Body=$message;
-  $mail->send();
 
+  $mail->isHTML(true);
+  $mail->Subject = $subject;
+  $mail->Body    = $message;
+
+  $mail->send();
   swal_and_redirect('success','Check your email','We sent a password reset link.','login.php');
 }catch(Exception $e){
-  swal_and_redirect('error','Cannot send email','Please contact admin.','forgot_password.php');
+  swal_and_redirect('error','Could not send email','Please contact admin or try again later.','forgot_password.php');
 }
