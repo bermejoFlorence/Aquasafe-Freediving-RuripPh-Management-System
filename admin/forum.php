@@ -500,11 +500,11 @@ if ($st && $st->execute()) {
               <i class="fa-solid fa-magnifying-glass"></i>
               <input type="text" placeholder="Search posts, tags, people…">
             </div>
-            <select class="forum-sort">
+            <!-- <select class="forum-sort">
               <option>Newest</option><option>Most Liked</option>
               <option>Most Commented</option><option>Unanswered</option>
               <option>Bookmarked</option>
-            </select>
+            </select> -->
           </div>
         </div>
 

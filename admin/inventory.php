@@ -2247,6 +2247,70 @@ document.getElementById('dg_confirm_btn').addEventListener('click', async ()=>{
     btn.disabled = false; btn.textContent = old;
   }
 });
+// FIX: damaged -> cleaning
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-fix');
+  if (!btn) return;
+
+  const itemId  = parseInt(btn.dataset.id, 10);
+  const name    = btn.dataset.name || 'item';
+  const damaged = parseInt(btn.dataset.damaged || '0', 10);
+  if (!itemId || damaged <= 0) return;
+
+  // optional: piliin ilan ang ifi-fix (default = lahat ng damaged)
+  const ask = await Swal.fire({
+    title: 'Fix damaged items?',
+    html: `Move damaged <b>${name}</b> to Cleaning.`,
+    input: 'number',
+    inputValue: damaged,
+    inputLabel: 'Quantity to fix',
+    inputAttributes: { min: 1, max: damaged, step: 1 },
+    showCancelButton: true,
+    confirmButtonText: 'Fix',
+    preConfirm: (v) => {
+      const n = parseInt(v, 10);
+      if (isNaN(n) || n < 1 || n > damaged) {
+        Swal.showValidationMessage(`Enter 1–${damaged}`);
+        return false;
+      }
+      return n;
+    }
+  });
+  if (!ask.isConfirmed) return;
+
+  const qty = parseInt(ask.value, 10);
+
+  try {
+    const resp = await fetch('fix_damage.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, qty })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data.message || 'Request failed');
+
+    // ✅ in-place UI update gamit ang counts galing sa backend
+    const row = btn.closest('tr');
+    if (row && data.counts) {
+      // columns order mo: Available • Cleaning • Damaged • In use
+      const tds = row.querySelectorAll('td');
+      // hanapin via class para safe:
+      row.querySelectorAll('.qty-col')[0].innerHTML = `<b>${data.counts.available}</b>`; // Available
+      row.querySelectorAll('.qty-col')[1].innerHTML = `<b>${data.counts.cleaning}</b>`;  // Cleaning
+      row.querySelectorAll('.qty-col')[2].innerHTML = `<b>${data.counts.damaged}</b>`;   // Damaged
+      row.querySelector('.inuse-col').innerHTML     = `<b>${data.counts.in_use}</b>`;     // In use
+
+      // update data-damaged at disable kung zero na
+      btn.dataset.damaged = String(data.counts.damaged || 0);
+      if ((data.counts.damaged || 0) <= 0) btn.setAttribute('disabled','');
+      else btn.removeAttribute('disabled');
+    }
+
+    await Swal.fire({ icon:'success', title:'Updated', text:`Fixed ${qty} item(s).` });
+  } catch (err) {
+    Swal.fire({ icon:'error', title:'Update failed', text:String(err.message || err) });
+  }
+});
 
 </script>
 
