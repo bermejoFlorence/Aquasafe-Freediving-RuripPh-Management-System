@@ -20,7 +20,7 @@ if ($post_id <= 0) {
   echo json_encode(['ok' => false, 'message' => 'Invalid post_id']); exit;
 }
 
-// optional: check post exists
+// optional: confirm post exists
 if ($st = $conn->prepare("SELECT 1 FROM forum_post WHERE post_id=? LIMIT 1")) {
   $st->bind_param('i', $post_id);
   $st->execute();
@@ -32,15 +32,24 @@ if ($st = $conn->prepare("SELECT 1 FROM forum_post WHERE post_id=? LIMIT 1")) {
   }
 }
 
+/*
+ * Parents only + replies_count
+ */
 $sql = "
   SELECT
-    c.comment_id, c.body,
+    c.comment_id,
+    c.body,
     DATE_FORMAT(c.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
-    u.user_id, u.full_name,
-    COALESCE(u.profile_pic,'uploads/default.png') AS profile_pic
+    u.user_id,
+    u.full_name,
+    COALESCE(u.profile_pic,'uploads/default.png') AS profile_pic,
+    (
+      SELECT COUNT(*) FROM forum_post_comment r
+      WHERE r.parent_id = c.comment_id
+    ) AS replies_count
   FROM forum_post_comment c
   JOIN user u ON u.user_id = c.user_id
-  WHERE c.post_id = ?
+  WHERE c.post_id = ? AND c.parent_id IS NULL
   ORDER BY c.created_at ASC, c.comment_id ASC
   LIMIT ? OFFSET ?
 ";
@@ -53,9 +62,13 @@ $comments = [];
 while ($r = $res->fetch_assoc()) { $comments[] = $r; }
 $st->close();
 
-// detect has_more (cheap peek)
+/* has_more on parents only */
 $has_more = false;
-if ($st2 = $conn->prepare("SELECT 1 FROM forum_post_comment WHERE post_id=? LIMIT 1 OFFSET ?")) {
+if ($st2 = $conn->prepare("
+  SELECT 1 FROM forum_post_comment
+  WHERE post_id=? AND parent_id IS NULL
+  LIMIT 1 OFFSET ?
+")) {
   $peekOffset = $offset + $limit;
   $st2->bind_param('ii', $post_id, $peekOffset);
   $st2->execute();

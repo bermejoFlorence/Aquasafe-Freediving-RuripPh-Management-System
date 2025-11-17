@@ -64,6 +64,7 @@ $sql = "SELECT
           p.likes, p.comments, p.bookmarks, p.views,
           p.created_at,
           u.full_name,
+          p.user_id AS post_author_id,   
           COALESCE(u.profile_pic,'uploads/default.png') AS profile_pic,
           u.role AS user_role,
           fc.name  AS category_name,
@@ -218,6 +219,29 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
   display: block;
   background: #fafcfd;         /* subtle bg habang naglo-load */
 }
+/* --- Reply form width / layout --- */
+.comment-item .reply-form{
+  width:100%;
+  display:grid;            /* textarea row + actions row */
+  grid-template-columns: 1fr;
+  margin-top:6px;          /* keep your spacing */
+}
+.comment-item .reply-form textarea{
+  width:100%;
+  box-sizing:border-box;
+  min-height:70px;
+  border:1.5px solid #cfe5ea;
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+  resize:vertical;         /* optional */
+}
+.comment-item .reply-form .reply-actions{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  margin-top:6px;
+}
 
   </style>
 </head>
@@ -303,6 +327,14 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
           <div class="pf-action" style="display:inline-flex;align-items:center;gap:6px;">
             <span>👁</span><span class="pf-view-count"><?= (int)$p['views'] ?></span>
           </div>
+
+          <!-- REPORT -->
+<button type="button"
+        class="btn ghost danger"
+        data-act="report-post"
+        data-post-id="<?= (int)$p['post_id'] ?>"
+        title="Report this post">🚩 Report</button>
+
         </div>
 
         <!-- Comments thread (always visible on this page) -->
@@ -327,43 +359,29 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
       </article>
     </div>
   </main>
-
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.getElementById('sidebar');
-    const hamburger = document.getElementById('hamburger-btn');
-    const overlay = document.getElementById('sidebar-overlay');
+  const sidebar   = document.getElementById('sidebar');
+  const hamburger = document.getElementById('hamburger-btn');
+  const overlay   = document.getElementById('sidebar-overlay');
 
-    function openSidebar() {
-        sidebar.classList.add('open');
-        overlay.classList.add('active');
-        document.body.style.overflow = "hidden";
-    }
-    function closeSidebar() {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('active');
-        document.body.style.overflow = "";
-    }
+  function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('active'); document.body.style.overflow = "hidden"; }
+  function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('active'); document.body.style.overflow = ""; }
 
-    // Hamburger toggles open/close
-    if (hamburger) {
-        hamburger.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (sidebar.classList.contains('open')) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
-        });
-    }
+  if (hamburger) {
+    hamburger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    });
+  }
+
   /* avatar in composer (header already uses it) */
   const me = window.CURRENT_USER || { profile_pic: '../uploads/default.png' };
 
-  /* ===== Like toggle (same behavior as list page) ===== */
+  /* ===== Like toggle (unchanged) ===== */
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-like');
     if (!btn) return;
-
     if (btn.dataset.busy === '1') return;
     btn.dataset.busy = '1';
 
@@ -371,13 +389,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const likedNow = btn.classList.contains('liked');
     const postId   = btn.getAttribute('data-post-id');
 
-    // optimistic
     let oldCount = parseInt(countEl?.textContent || '0', 10);
     let newCount = likedNow ? Math.max(oldCount - 1, 0) : oldCount + 1;
     countEl.textContent = String(newCount);
     btn.classList.toggle('liked', !likedNow);
     btn.setAttribute('aria-label', likedNow ? 'Like' : 'Unlike');
-    btn.setAttribute('title',      likedNow ? 'Like' : 'Unlike');
+    btn.setAttribute('title',      likedNow ? 'Like' : 'Like');
 
     try {
       const res = await fetch('forum_like_toggle.php', {
@@ -394,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.setAttribute('title',      data.liked ? 'Unlike' : 'Like');
       btn.dataset.liked = data.liked ? '1' : '0';
     } catch (err) {
-      // revert on error
       countEl.textContent = String(oldCount);
       btn.classList.toggle('liked', likedNow);
       btn.setAttribute('aria-label', likedNow ? 'Unlike' : 'Like');
@@ -405,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ===== Comments: render helpers ===== */
+  /* ===== Comments: helpers (NEW: with replies UI) ===== */
   function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
   function webPathFromAdmin(p){
     if (!p) return '../uploads/default.png';
@@ -413,18 +429,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (p.startsWith('uploads/')) return '../' + p;
     return '../uploads/' + p.replace(/^\/+/, '');
   }
+
+  // Parent comment + actions + inline reply form + replies box
   function renderCommentItem(c){
     const when = c.created_at ? esc(c.created_at) : 'Just now';
     const pic  = webPathFromAdmin(c.profile_pic);
     const name = esc(c.full_name || 'User');
     const body = esc(c.body || '');
+    const rc   = Number(c.replies_count || 0);
+
     return `
       <div class="comment-item" data-comment-id="${c.comment_id}">
         <img src="${pic}" alt="" class="avatar" />
-        <div style="display:grid; gap:4px;">
+        <div style="display:grid; gap:6px;">
           <div style="display:flex; gap:8px; align-items:center;">
             <strong>${name}</strong>
             <span class="muted" style="font-size:.85em;">${when}</span>
+          </div>
+          <div style="white-space:pre-wrap; color:#2a515c;">${body}</div>
+
+          <div class="comment-actions" style="display:flex; gap:10px;">
+            <button type="button" class="btn" data-act="reply-toggle">↩️ Reply</button>
+            <button type="button" class="btn" data-act="show-replies" data-loaded="0" data-open="0">
+              Replies: <span class="rc">${rc}</span>
+            </button>
+             <button type="button" class="btn ghost danger" data-act="report-comment">🚩 Report</button>
+          </div>
+
+          <!-- inline reply composer -->
+<form class="reply-form" data-post-id="${window.VIEW_POST_ID}"
+      data-parent-id="${c.comment_id}" style="display:none;">
+  <textarea name="body" rows="2" placeholder="Write a reply…" required></textarea>
+  <div class="reply-actions">
+    <button type="submit" class="btn primary">Reply</button>
+    <button type="button" class="btn" data-act="reply-cancel">Cancel</button>
+  </div>
+</form>
+          <!-- replies container -->
+          <div class="comment-children" data-parent-id="${c.comment_id}" style="display:none; border-left:2px solid #e6f2f6; padding-left:12px;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderReplyItem(r){
+    const when = r.created_at ? esc(r.created_at) : 'Just now';
+    const pic  = webPathFromAdmin(r.profile_pic);
+    const name = esc(r.full_name || 'User');
+    const body = esc(r.body || '');
+    return `
+      <div class="comment-item" data-comment-id="${r.comment_id}" style="border-color:#eef6f8;">
+        <img src="${pic}" alt="" class="avatar" style="width:32px;height:32px;" />
+        <div style="display:grid; gap:4px;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <strong>${name}</strong>
+            <span class="muted" style="font-size:.82em;">${when}</span>
           </div>
           <div style="white-space:pre-wrap; color:#2a515c;">${body}</div>
         </div>
@@ -432,7 +491,51 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  /* ===== Load first page of comments on page load ===== */
+  async function loadRepliesFor(parentId, { open = true } = {}) {
+    const card   = document.querySelector(`.comment-item[data-comment-id="${CSS.escape(String(parentId))}"]`);
+    if (!card) return;
+
+    const btn    = card.querySelector('[data-act="show-replies"]');
+    const box    = card.querySelector('.comment-children');
+    const rcSpan = btn?.querySelector('.rc');
+    if (!btn || !box) return;
+
+    if (btn.getAttribute('data-loaded') !== '1') {
+      try {
+        const fd  = new URLSearchParams({
+          post_id: String(window.VIEW_POST_ID || ''),
+          parent_id: String(parentId),
+          page: '1',
+          limit: '100'
+        });
+        const res = await fetch('forum_comment_children.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: fd.toString()
+        });
+        const data = await res.json();
+        if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+        box.innerHTML = data.replies.length
+          ? data.replies.map(renderReplyItem).join('')
+          : '<div class="muted" style="margin-left:2px;">No replies yet.</div>';
+
+        btn.setAttribute('data-loaded', '1');
+      } catch (err) {
+        console.error('loadRepliesFor failed', err);
+        Swal.fire({ icon:'error', title:'Failed to load replies', text:String(err), confirmButtonColor:'#1e8fa2' });
+        return;
+      }
+    }
+
+    if (open) {
+      box.style.display = '';
+      btn.setAttribute('data-open', '1');
+      btn.innerHTML = `Hide replies (<span class="rc">${rcSpan?.textContent || '0'}</span>)`;
+    }
+  }
+
+  /* ===== Initial load: parents + auto-open replies; focus support ===== */
   (async function loadFirstComments(){
     const postId = String(window.VIEW_POST_ID || '');
     const list   = document.getElementById('comments-' + postId);
@@ -442,9 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     list.innerHTML = '<div class="muted">Loading comments…</div>';
 
     try {
-      const fd = new URLSearchParams();
-      fd.set('post_id', postId); fd.set('page', '1'); fd.set('limit', '10');
-
+      const fd = new URLSearchParams({ post_id: postId, page: '1', limit: '10' });
       const res = await fetch('forum_comment_list.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -457,19 +558,49 @@ document.addEventListener('DOMContentLoaded', () => {
         ? data.comments.map(renderCommentItem).join('')
         : '<div class="muted">No comments yet. Be the first to comment.</div>';
 
-      if (data.has_more) {
-        more.style.display = '';
-        more.dataset.nextPage = data.next_page;
-      } else {
-        more.style.display = 'none';
+      // Auto-open replies for parents that have them (para makita lahat ng replied comments)
+      const parentsWithReplies = (data.comments || []).filter(c => Number(c.replies_count || 0) > 0);
+      for (const c of parentsWithReplies) {
+        await loadRepliesFor(c.comment_id, { open: true });
       }
+
+      // Focus support (?focus=comment_id)
+      const url = new URL(window.location.href);
+      const focusId = url.searchParams.get('focus');
+      if (focusId) {
+        // subukan i-open kung reply siya sa parent na nasa page
+        const targetEl = document.querySelector(`.comment-item[data-comment-id="${CSS.escape(String(focusId))}"]`);
+        if (targetEl) {
+          highlightAndScroll(targetEl);
+        } else {
+          // baka parent pa lang ang nasa DOM pero nakatago ang replies → open lahat muna
+          const parentCards = document.querySelectorAll('.comment-item [data-act="show-replies"]');
+          for (const btn of parentCards) {
+            const card = btn.closest('.comment-item');
+            const parentId = card?.dataset.commentId;
+            if (parentId) await loadRepliesFor(parentId, { open:true });
+          }
+          const t2 = document.querySelector(`.comment-item[data-comment-id="${CSS.escape(String(focusId))}"]`);
+          if (t2) highlightAndScroll(t2);
+        }
+      }
+
+      if (data.has_more) { more.style.display = ''; more.dataset.nextPage = data.next_page; }
+      else { more.style.display = 'none'; }
     } catch (err) {
       list.innerHTML = '<div class="muted">Failed to load comments.</div>';
       console.error(err);
     }
   })();
 
-  /* ===== Load more comments ===== */
+  function highlightAndScroll(el){
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.boxShadow = '0 0 0 3px rgba(30,143,162,.25)';
+    el.style.transition = 'box-shadow 0.6s';
+    setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+  }
+
+  /* ===== Load more parents (also auto-open their replies) ===== */
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.comments-more [data-act="load-more"]');
     if (!btn) return;
@@ -482,9 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.disabled = true; const old = btn.textContent; btn.textContent = 'Loading…';
 
     try {
-      const fd = new URLSearchParams();
-      fd.set('post_id', postId); fd.set('page', String(next)); fd.set('limit', '10');
-
+      const fd = new URLSearchParams({ post_id: postId, page: String(next), limit: '10' });
       const res = await fetch('forum_comment_list.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -493,7 +622,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
 
-      if (data.comments.length) list.insertAdjacentHTML('beforeend', data.comments.map(renderCommentItem).join(''));
+      if (data.comments.length) {
+        list.insertAdjacentHTML('beforeend', data.comments.map(renderCommentItem).join(''));
+        // auto-open replies for newly appended parents with replies
+        const parentsWithReplies = (data.comments || []).filter(c => Number(c.replies_count || 0) > 0);
+        for (const c of parentsWithReplies) {
+          await loadRepliesFor(c.comment_id, { open: true });
+        }
+      }
+
       if (data.has_more) { more.dataset.nextPage = data.next_page; btn.disabled = false; btn.textContent = old; }
       else { more.style.display = 'none'; }
     } catch (err) {
@@ -501,8 +638,114 @@ document.addEventListener('DOMContentLoaded', () => {
       Swal.fire({ icon:'error', title:'Failed to load more', text:String(err), confirmButtonColor:'#1e8fa2' });
     }
   });
+// 2-step report modal: confirm -> reason form
+async function promptReportTwoStep({ type, id }) {
+  // STEP 1: quick confirm
+  const c = await Swal.fire({
+    icon: 'warning',
+    title: `Report this ${type === 'comment' ? 'comment' : 'post'}?`,
+    text: 'Do you want to send a report for review?',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, report',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#1e8fa2'
+  });
+  if (!c.isConfirmed) return;
 
-  /* ===== Submit comment ===== */
+  // STEP 2: reason + notes
+  const html = `
+    <div style="text-align:left">
+      <div style="font-weight:600;margin-bottom:6px">Reason</div>
+      <label style="display:block;margin-bottom:6px">
+        <input type="radio" name="r-reason" value="spam" checked> Spam / Scam
+      </label>
+      <label style="display:block;margin-bottom:6px">
+        <input type="radio" name="r-reason" value="offensive"> Offensive / Profanity
+      </label>
+      <label style="display:block;margin-bottom:6px">
+        <input type="radio" name="r-reason" value="harassment"> Harassment / Bullying
+      </label>
+      <label style="display:block;margin-bottom:6px">
+        <input type="radio" name="r-reason" value="hate"> Hate Speech
+      </label>
+      <label style="display:block;margin-bottom:10px">
+        <input type="radio" name="r-reason" value="nsfw"> NSFW / Sexual Content
+      </label>
+      <label style="display:block;margin-bottom:6px">
+        <input type="radio" name="r-reason" value="other"> Other (please specify)
+      </label>
+
+      <div style="font-weight:600;margin:10px 0 6px">Notes (optional)</div>
+      <textarea id="r-notes" class="swal2-textarea" rows="3"
+        placeholder="Add details, quotes, or context…"></textarea>
+      <div class="muted" style="font-size:.85em;margin-top:6px;color:#6b7f86">
+        Your report is anonymous to other users.
+      </div>
+    </div>
+  `;
+
+  const { value: form } = await Swal.fire({
+    title: 'Report details',
+    html,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: 'Submit report',
+    cancelButtonText: 'Back',
+    preConfirm: () => {
+      const reason = [...document.querySelectorAll('input[name="r-reason"]')]
+        .find(x => x.checked)?.value || '';
+      const notes = (document.getElementById('r-notes') || {}).value || '';
+      if (!reason) { Swal.showValidationMessage('Please select a reason.'); return false; }
+      if (reason === 'other' && notes.trim() === '') {
+        Swal.showValidationMessage('Please add a short note for "Other".'); return false;
+      }
+      return { reason, notes };
+    }
+  });
+  if (!form) return;
+
+  const fd = new URLSearchParams();
+  fd.set('type', type);           // 'post' | 'comment'
+  fd.set('id', String(id));
+  fd.set('reason', form.reason);
+  fd.set('notes', form.notes);
+
+  try {
+    const res  = await fetch('forum_report_create.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: fd.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to submit report');
+    Swal.fire({
+      icon: 'success',
+      title: 'Thanks for the report',
+      text: 'Our moderators will review this shortly.',
+      confirmButtonColor: '#1e8fa2'
+    });
+  } catch (err) {
+    Swal.fire({ icon:'error', title:'Could not send report', text:String(err), confirmButtonColor:'#1e8fa2' });
+  }
+}
+
+  // Post-level report
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act="report-post"]');
+  if (!b) return;
+  promptReportTwoStep({ type: 'post', id: b.dataset.postId });
+});
+
+// Comment-level report
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act="report-comment"]');
+  if (!b) return;
+  const card = b.closest('.comment-item');
+  if (!card) return;
+  promptReportTwoStep({ type: 'comment', id: card.dataset.commentId });
+});
+
+  /* ===== Submit parent comment (unchanged, now parents-only) ===== */
   document.addEventListener('submit', async (e) => {
     const form = e.target.closest('.comment-form');
     if (!form) return;
@@ -524,9 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
 
     try {
-      const fd = new URLSearchParams();
-      fd.set('post_id', postId); fd.set('body', bodyText);
-
+      const fd = new URLSearchParams({ post_id: postId, body: bodyText });
       const res = await fetch('forum_comment_create.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -535,7 +776,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
 
-      list?.insertAdjacentHTML('beforeend', renderCommentItem(data.comment));
+      // insert as new parent (no replies yet)
+      list?.insertAdjacentHTML('beforeend', renderCommentItem({ ...data.comment, replies_count: 0 }));
 
       // increment 💬 counter
       if (countEl) countEl.textContent = String((parseInt(countEl.textContent||'0',10) || 0) + 1);
@@ -549,7 +791,123 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ===== Views tracker (optional; requires forum_view_track.php) ===== */
+  /* ===== Toggle reply form ===== */
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act="reply-toggle"]');
+    if (!btn) return;
+    const card = btn.closest('.comment-item');
+    const form = card?.querySelector('.reply-form');
+    if (!form) return;
+    form.style.display = (form.style.display === 'none' || !form.style.display) ? '' : 'none';
+    if (form.style.display !== 'none') form.querySelector('textarea')?.focus();
+  });
+
+  /* ===== Cancel reply ===== */
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act="reply-cancel"]');
+    if (!btn) return;
+    const form = btn.closest('.reply-form');
+    if (!form) return;
+    const ta = form.querySelector('textarea'); if (ta) ta.value = '';
+    form.style.display = 'none';
+  });
+
+  /* ===== Show/Hide replies (lazy-load first click) ===== */
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act="show-replies"]');
+    if (!btn) return;
+    const card = btn.closest('.comment-item');
+    const parentId = card?.dataset.commentId;
+    const box      = card?.querySelector('.comment-children');
+    const rcSpan   = btn.querySelector('.rc');
+    if (!parentId || !box) return;
+
+    const loaded = btn.getAttribute('data-loaded') === '1';
+    const open   = btn.getAttribute('data-open') === '1';
+
+    if (!loaded) {
+      btn.disabled = true; const old = btn.textContent; btn.textContent = 'Loading…';
+      try {
+        await loadRepliesFor(parentId, { open: true });
+      } finally {
+        btn.disabled = false; btn.textContent = old;
+      }
+      return;
+    }
+
+    // toggle open/close
+    if (!open) {
+      box.style.display = '';
+      btn.setAttribute('data-open', '1');
+      btn.innerHTML = `Hide replies (<span class="rc">${rcSpan?.textContent || '0'}</span>)`;
+    } else {
+      box.style.display = 'none';
+      btn.setAttribute('data-open', '0');
+      btn.innerHTML = `Replies: <span class="rc">${rcSpan?.textContent || '0'}</span>`;
+    }
+  });
+
+  /* ===== Submit a reply ===== */
+  document.addEventListener('submit', async (e) => {
+    const form = e.target.closest('.reply-form');
+    if (!form) return;
+    e.preventDefault();
+
+    if (form.dataset.busy === '1') return;
+    form.dataset.busy = '1';
+
+    const postId   = form.getAttribute('data-post-id');
+    const parentId = form.getAttribute('data-parent-id');
+    const ta       = form.querySelector('textarea[name="body"]');
+    const bodyText = (ta?.value || '').trim();
+
+    const card     = form.closest('.comment-item');
+    const box      = card?.querySelector('.comment-children');
+    const toggle   = card?.querySelector('[data-act="show-replies"]');
+    const rcSpan   = toggle?.querySelector('.rc');
+    const postCountEl = document.querySelector('.pf-comment-count');
+
+    if (!bodyText) { form.dataset.busy = '0'; return; }
+
+    const btn = form.querySelector('button[type="submit"]');
+    const old = btn ? btn.textContent : '';
+    if (btn){ btn.disabled = true; btn.textContent = 'Replying…'; }
+
+    try {
+      const fd = new URLSearchParams({
+        post_id: postId,
+        parent_comment_id: parentId,
+        body: bodyText
+      });
+      const res  = await fetch('forum_comment_create.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: fd.toString()
+      });
+      const data = await res.json();
+      if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+      // ensure replies visible then append
+      if (box.style.display === 'none' || !box.innerHTML.trim()) box.style.display = '';
+      box.insertAdjacentHTML('beforeend', renderReplyItem(data.comment));
+
+      // bump replies pill
+      if (rcSpan) rcSpan.textContent = String((parseInt(rcSpan.textContent||'0',10)||0) + 1);
+      // bump post-level 💬 counter
+      if (postCountEl) postCountEl.textContent = String((parseInt(postCountEl.textContent||'0',10)||0) + 1);
+
+      // clear + hide form
+      if (ta) ta.value = '';
+      form.style.display = 'none';
+    } catch (err) {
+      Swal.fire({ icon:'error', title:'Reply failed', text:String(err), confirmButtonColor:'#1e8fa2' });
+    } finally {
+      if (btn){ btn.disabled = false; btn.textContent = old || 'Reply'; }
+      form.dataset.busy = '0';
+    }
+  });
+
+  /* ===== Views tracker (optional; unchanged) ===== */
   (async function trackView(){
     const postId = String(window.VIEW_POST_ID || '');
     const vc = document.querySelector('.pf-view-count');
@@ -563,11 +921,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (res.ok && data && data.ok && typeof data.views_count !== 'undefined' && vc) {
         vc.textContent = String(data.views_count);
       }
-    } catch (_) {
-      /* silent fail; page still works */
-    }
+    } catch (_) {/* silent */}
   })();
 });
 </script>
+
 </body>
 </html>

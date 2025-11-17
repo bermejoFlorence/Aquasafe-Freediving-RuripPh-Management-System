@@ -1,79 +1,146 @@
 <?php
-session_start();
-header('Content-Type: application/json');
+// admin/admin_get_notifications.php
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once '../db_connect.php';
+header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
-    echo json_encode([]); exit;
+  http_response_code(401);
+  echo json_encode([]);
+  exit;
 }
-$admin_id = (int)($_SESSION['user_id'] ?? 0);
-if (!$admin_id) { echo json_encode([]); exit; }
 
+$admin_id = (int)$_SESSION['user_id'];
+$limit    = 20;
+$only     = trim($_GET['only'] ?? '');   // e.g. 'report' for the Reports tab
+
+// ---- base SQL (we'll tack on the optional filter below) ----
 $sql = "
-SELECT 
-    n.*,
+SELECT
+  n.notification_id,
+  n.type,
+  n.message,
+  n.related_id,
+  n.is_read,
+  n.created_at,
+  n.user_id AS notif_user_id,           -- personal vs broadcast
 
-    -- booking
-    b.booking_date,
-    p.name AS package_name,
+  -- FOR NEW/BROADCAST POST (type='forum')
+  fp.title              AS forum_title,
+  fcp.slug              AS forum_cat_slug,
+  fp.user_id            AS forum_author_id,
 
-    -- payment (resolve booking/package via payment.related_id = payment_id)
-    (SELECT booking_id FROM payment WHERE payment_id = n.related_id LIMIT 1) AS pay_booking_id,
-    (SELECT booking_date FROM booking WHERE booking_id = (SELECT booking_id FROM payment WHERE payment_id = n.related_id LIMIT 1)) AS pay_booking_date,
-    (SELECT name FROM package WHERE package_id = (
-        SELECT package_id FROM booking WHERE booking_id = (SELECT booking_id FROM payment WHERE payment_id = n.related_id LIMIT 1)
-    )) AS pay_package_name,
+  -- OPTIONAL SUPPORT: FOR REPLY (type='forum_reply')
+  rpp.post_id           AS reply_post_id,
+  rpp.title             AS reply_post_title,
+  rfc.slug              AS reply_cat_slug,
 
-    -- forum
-    fp.title AS forum_title,
-    fc2.slug AS forum_slug
+  -- NEW: JOIN report details when type='report'
+  r.report_id           AS report_id,
+  r.status              AS report_status,
+  r.target_type         AS report_target_type,
+  r.post_id             AS report_post_id,
+  r.target_id           AS report_target_id
 FROM notification n
-LEFT JOIN booking b        ON (n.type='booking' AND n.related_id = b.booking_id)
-LEFT JOIN package p        ON b.package_id = p.package_id
-LEFT JOIN forum_post fp    ON (n.type='forum' AND n.related_id = fp.post_id)
-LEFT JOIN forum_category fc2 ON (n.type='forum' AND fc2.category_id = fp.category_id)
-WHERE n.type IN ('booking','payment','forum')
-  AND n.user_id = ?
-ORDER BY n.is_read ASC, n.created_at DESC
-LIMIT 20
+
+LEFT JOIN forum_post fp
+  ON (n.type = 'forum' AND n.related_id = fp.post_id)
+LEFT JOIN forum_category fcp
+  ON (fp.category_id = fcp.category_id)
+
+LEFT JOIN forum_post_comment rpc
+  ON (n.type = 'forum_reply' AND n.related_id = rpc.comment_id)
+LEFT JOIN forum_post rpp
+  ON (rpc.post_id = rpp.post_id)
+LEFT JOIN forum_category rfc
+  ON (rpp.category_id = rfc.category_id)
+
+-- NEW: only matches when n.type='report'
+LEFT JOIN forum_report r
+  ON (n.type = 'report' AND n.related_id = r.report_id)
+
+WHERE
+  (
+    n.user_id = ?                                 -- personal to this admin
+    OR (n.user_id IS NULL AND n.type = 'forum')   -- broadcast new forum post
+  )
+  AND n.type IN (
+    'booking_status','payment_status','forum',
+    'booking_reschedule','booking','payment',
+    'forum_reply','report'                         -- ← NEW
+  )
+  -- keep the author-hide only for forum broadcasts
+  AND NOT (n.type = 'forum' AND fp.user_id = ?)
 ";
 
-$stmt = $conn->prepare($sql);
-if (!$stmt) {
-    echo json_encode([]); exit;
+if ($only === 'report') {
+  $sql .= " AND n.type = 'report' ";
 }
-$stmt->bind_param('i', $admin_id);
+
+$sql .= " ORDER BY n.is_read ASC, n.created_at DESC LIMIT ? ";
+
+$stmt = $conn->prepare($sql);
+$stmt->bind_param('iii', $admin_id, $admin_id, $limit);
 $stmt->execute();
-$result = $stmt->get_result();
+$res = $stmt->get_result();
 
-$notifications = [];
-while ($row = $result->fetch_assoc()) {
-    $package_name = $row['type'] === 'payment'
-        ? ($row['pay_package_name'] ?: '')
-        : ($row['package_name']   ?: '');
-    $booking_date = $row['type'] === 'payment'
-        ? ($row['pay_booking_date'] ?: '')
-        : ($row['booking_date']     ?: '');
+$out = [];
+while ($row = $res->fetch_assoc()) {
+  $type = (string)$row['type'];
+  $link = '';
+  $msg  = (string)($row['message'] ?? '');
 
-    // default links per type
-    $link = 'bookings.php';
-    if ($row['type'] === 'forum') {
-        $slug = $row['forum_slug'] ?: 'all';
-        $link = 'forum.php?cat=' . urlencode($slug) . '&highlight=' . (int)$row['related_id'];
+  if ($type === 'booking_status' && !empty($row['related_id'])) {
+    $link = 'view_booking.php?booking_id=' . (int)$row['related_id'];
+
+  } elseif ($type === 'payment_status' || $type === 'payment') {
+    $link = 'payments.php';
+
+  } elseif ($type === 'forum' && !empty($row['related_id'])) {
+    if (!is_null($row['notif_user_id'])) {
+      // personal forum notif (comment/reply) → full thread
+      $link = 'view_post.php?post_id=' . (int)$row['related_id'];
+    } else {
+      // broadcast (new post) → feed + highlight
+      $slug = $row['forum_cat_slug'] ?: 'all';
+      $link = 'forum.php?cat=' . urlencode($slug) . '&highlight=' . (int)$row['related_id'];
+    }
+    if ($msg === '') {
+      $title = trim((string)($row['forum_title'] ?? ''));
+      $msg = 'New forum post: ' . ($title !== '' ? $title : '(untitled)');
     }
 
-    $notifications[] = [
-        'notification_id' => (int)$row['notification_id'],
-        'message'         => $row['message'],
-        'created_at'      => $row['created_at'],
-        'type'            => $row['type'],
-        'related_id'      => (int)$row['related_id'],
-        'package_name'    => $package_name,
-        'booking_date'    => $booking_date,
-        'forum_title'     => $row['forum_title'] ?? '',
-        'is_read'         => (int)$row['is_read'],
-        'link'            => $link,
-    ];
+  } elseif ($type === 'forum_reply' && !empty($row['related_id'])) {
+    $postId  = (int)($row['reply_post_id'] ?? 0);
+    $comment = (int)$row['related_id']; // reply comment_id
+    if ($postId > 0) $link = 'view_post.php?post_id=' . $postId . '&focus=' . $comment;
+    if ($msg === '') {
+      $title = trim((string)($row['reply_post_title'] ?? ''));
+      $msg = 'New reply on: ' . ($title !== '' ? $title : 'your post');
+    }
+
+  } elseif ($type === 'report') {
+    // NEW: link straight to the moderation page
+    $rid  = (int)($row['report_id'] ?? $row['related_id']);
+    $link = 'reports.php?rid=' . $rid;
+    if ($msg === '') {
+      $what = ($row['report_target_type'] ?? 'post');
+      $msg  = 'New report on ' . $what . ' (ID ' . $rid . ')';
+    }
+  }
+
+  $out[] = [
+    'notification_id' => (int)$row['notification_id'],
+    'type'            => $type,
+    'message'         => $msg,
+    'related_id'      => (int)$row['related_id'],
+    'is_read'         => (int)$row['is_read'],
+    'created_at'      => $row['created_at'],
+    'forum_cat_slug'  => $row['forum_cat_slug'] ?: ($row['reply_cat_slug'] ?? 'all'),
+    'forum_title'     => $row['forum_title'] ?: ($row['reply_post_title'] ?? ''),
+    'report_status'   => $row['report_status'] ?? null,       // ← for badges on Reports tab
+    'link'            => $link,
+  ];
 }
 
-echo json_encode($notifications);
+echo json_encode($out);
