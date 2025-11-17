@@ -1,88 +1,49 @@
 <?php
 session_start();
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-// 0) Must be logged in as client
 if (!isset($_SESSION['user_id']) || (($_SESSION['role'] ?? '') !== 'client')) {
-    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Access Denied</title>
-          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
-          <script>
-            Swal.fire({icon:'error',title:'Access Denied',text:'You do not have permission to access this page.',confirmButtonColor:'#1e8fa2'})
-              .then(()=>{ window.location='../login.php'; });
-          </script></body></html>";
-    exit;
+  echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Access Denied</title>
+  <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
+  <script>
+    Swal.fire({icon:'error',title:'Access Denied',text:'You do not have permission to access this page.',confirmButtonColor:'#1e8fa2'})
+      .then(()=>{ window.location='../login.php'; });
+  </script></body></html>";
+  exit;
+}
+require_once '../db_connect.php';
+
+$uid = (int)($_SESSION['user_id'] ?? 0);
+$stm = $conn->prepare("SELECT account_status, banned_until, banned_reason, session_version FROM user WHERE user_id=? LIMIT 1");
+$stm->bind_param("i", $uid);
+$stm->execute();
+$row = $stm->get_result()->fetch_assoc();
+$stm->close();
+
+$kick = function(string $msg) {
+  echo "<script>
+    Swal.fire({icon:'error',title:'Session ended',html:".json_encode($msg).",confirmButtonColor:'#1e8fa2'})
+      .then(()=>{ window.location='../login.php'; });
+  </script></body></html>";
+  session_destroy(); exit;
+};
+
+if (!$row) { $kick('Your session is invalid. Please log in again.'); }
+
+if (($row['account_status'] ?? 'active') === 'banned') {
+  $until = $row['banned_until'] ?? null;
+  if (empty($until) || strtotime($until) > time()) {
+    $reason = htmlspecialchars($row['banned_reason'] ?? '', ENT_QUOTES, 'UTF-8');
+    $msg = 'Your account is banned.';
+    if ($reason) $msg .= '<br><b>Reason:</b> '.$reason;
+    if ($until)  $msg .= '<br><b>Until:</b> '.date('M j, Y g:ia', strtotime($until));
+    $kick($msg);
+  }
 }
 
-require_once '../db_connect.php'; // keep this single include here
-
-$uid = (int)$_SESSION['user_id'];
-$stmt = $conn->prepare("
-    SELECT account_status, banned_until, banned_reason, session_version
-    FROM user
-    WHERE user_id = ?
-    LIMIT 1
-");
-$stmt->bind_param("i", $uid);
-$stmt->execute();
-$stmt->bind_result($status, $bannedUntil, $bannedReason, $dbSessVer);
-$stmt->fetch();
-$stmt->close();
-
-// 1) Live-kick if admin changed session_version (e.g., ban issued now)
-if ((int)($dbSessVer ?? 0) !== (int)($_SESSION['session_version'] ?? 0)) {
-    session_unset(); session_destroy();
-    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Signed out</title>
-          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
-          <script>
-            Swal.fire({icon:'info',title:'Session ended',html:'Your session was updated by an administrator. Please sign in again.',confirmButtonColor:'#1e8fa2'})
-              .then(()=>{ window.location='../login.php'; });
-          </script></body></html>";
-    exit;
-}
-
-// 2) Block suspended or currently-banned accounts
-$stillBanned = ($status === 'banned') && (
-    empty($bannedUntil) || $bannedUntil === '0000-00-00 00:00:00' || strtotime($bannedUntil) > time()
-);
-
-if ($status === 'suspended' || $stillBanned) {
-    $reason = htmlspecialchars((string)$bannedReason, ENT_QUOTES, 'UTF-8');
-    $untilText = $bannedUntil
-        ? date('M j, Y g:ia', strtotime($bannedUntil))
-        : 'indefinite';
-
-    $title = ($status === 'suspended') ? 'Account suspended' : 'Account banned';
-    $lines = ($status === 'suspended')
-        ? 'Please contact the administrator.'
-        : 'You cannot use client features while banned.';
-    $reasonLine = $reason ? "<br><b>Reason:</b> {$reason}" : "";
-    $untilLine  = ($status === 'banned') ? "<br><b>Until:</b> {$untilText}" : "";
-
-    session_unset(); session_destroy();
-    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>$title</title>
-          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
-          <script>
-            Swal.fire({
-              icon:'error',
-              title: ".json_encode($title).",
-              html: ".json_encode($lines.$reasonLine.$untilLine).",
-              confirmButtonColor:'#1e8fa2'
-            }).then(()=>{ window.location='../login.php'; });
-          </script></body></html>";
-    exit;
-}
-
-// 3) Optional: auto-unban if ban already expired (status shows 'banned' but date passed)
-if ($status === 'banned' && $bannedUntil && strtotime($bannedUntil) <= time()) {
-    $conn->query("
-        UPDATE user
-           SET account_status='active',
-               banned_until=NULL, banned_reason=NULL, banned_by=NULL, banned_at=NULL
-         WHERE user_id={$uid}
-    ");
+if ((int)($_SESSION['session_version'] ?? 0) !== (int)($row['session_version'] ?? 0)) {
+  $kick('Your session was invalidated by an admin action. Please log in again.');
 }
 ?>
+
 <?php
 
 $packages = [];
