@@ -1,7 +1,7 @@
 <?php
 include 'includes/header.php';
 ?>
-
+<!-- try -->
 <section class="hero" style="
     min-height: calc(100vh - 90px);
     display: flex;
