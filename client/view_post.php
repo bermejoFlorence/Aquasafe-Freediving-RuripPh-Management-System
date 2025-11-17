@@ -1,5 +1,5 @@
 <?php
-// admin/forum_post_view.php
+// client/forum_post_view.php
 session_start();
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'client') {
   echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Access Denied</title>
@@ -30,6 +30,7 @@ function web_path_from_admin($p) {
   if (preg_match('#^https?://#', $p) || str_starts_with($p, '/')) return $p;
   if (substr($p, 0, 8) === 'uploads/') return '../' . $p;
   return '../uploads/' . ltrim($p, '/');
+  
 }
 
 if ($uid) {
@@ -63,9 +64,10 @@ $sql = "SELECT
           p.post_id, p.title, p.body, p.attachments_json,
           p.likes, p.comments, p.bookmarks, p.views,
           p.created_at,
+          u.user_id AS post_author_id,          -- ← ADD
           u.full_name,
           COALESCE(u.profile_pic,'uploads/default.png') AS profile_pic,
-          u.role AS user_role,
+          u.role AS user_role,                  -- 'admin' | 'member'
           fc.name  AS category_name,
           fc.slug  AS category_slug,
           EXISTS(SELECT 1 FROM forum_post_like fpl
@@ -128,6 +130,10 @@ if ($uid && $postId) {
     // }
 }
 
+$isPostByAdmin  = (strtolower($p['user_role'] ?? '') === 'admin');
+$canReportPost  = ($uid > 0)
+               && ($uid !== (int)($p['post_author_id'] ?? 0))
+               && !$isPostByAdmin;
 /* Page title: <Category> - <Post Title> */
 $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 'Post');
 ?>
@@ -142,8 +148,11 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link rel="stylesheet" href="styles/style.css" />
   <script>
-    window.CURRENT_USER = <?= json_encode($me, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-    window.VIEW_POST_ID = <?= (int)$p['post_id'] ?>;
+     window.CURRENT_USER = <?= json_encode($me, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
+  window.CURRENT_USER_ID = <?= (int)$uid ?>;                               /* ← ADD */
+  window.VIEW_POST_ID    = <?= (int)$p['post_id'] ?>;
+  window.POST_AUTHOR_ID  = <?= (int)($p['post_author_id'] ?? 0) ?>;        /* ← ADD */
+  window.POST_AUTHOR_ROLE= <?= json_encode(strtolower($p['user_role'] ?? '')) ?>; /* ← ADD */
   </script>
   <style>
     :root{
@@ -218,6 +227,68 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
   display: block;
   background: #fafcfd;         /* subtle bg habang naglo-load */
 }
+/* Reply form should stretch full width */
+.comment-item .reply-form{
+  width:100%;
+  display:grid;                  /* textarea row + actions row */
+  grid-template-columns: 1fr;
+  margin-top:6px;
+}
+.comment-item .reply-form textarea{
+  width:100%;
+  box-sizing:border-box;
+  min-height:70px;
+  border:1.5px solid #cfe5ea;
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+  resize:vertical;               /* optional */
+}
+.comment-item .reply-form .reply-actions{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  margin-top:6px;
+}
+/* Header row (name + time + small actions on the right) */
+.c-head{ display:flex; align-items:center; justify-content:space-between; }
+
+/* Tiny icon button for reply actions */
+.btn.icon{
+  border:1px solid #e0eef2; background:#fff;
+  padding:4px 6px; border-radius:8px; font-size:.85rem; cursor:pointer;
+}
+
+/* Optional: show on hover para malinis ang itsura */
+.comment-item.reply .btn.icon{ opacity:0; transition:opacity .15s ease; }
+.comment-item.reply:hover .btn.icon{ opacity:1; }
+/* —— Report modal polish ——————————————————————————— */
+.swk-report .swal2-popup{border-radius:16px;padding:22px 22px 16px}
+.swk-report .swal2-title{font-size:1.6rem;margin-bottom:6px;color:#0e6d7e}
+.swk-report .swal2-html-container{margin:0;text-align:left}
+
+.report-form .label{font-weight:700;margin:6px 0}
+.report-form .radio{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 10px;margin:0 0 8px 0;background:#fff;
+  border:1px solid #e1eef2;border-radius:10px;cursor:pointer;
+}
+.report-form .radio input{width:18px;height:18px}
+
+.report-form textarea,
+.report-form input[type="text"]{
+  width:100%;box-sizing:border-box;min-height:90px;
+  border:1.5px solid #cfe5ea;border-radius:12px;padding:10px 12px;
+}
+.report-form input[type="text"]{min-height:auto}
+
+.report-form .hint{font-size:.86rem;color:#6b7f86;margin-top:6px}
+.report-form .count{font-size:.8rem;color:#7b8d93;text-align:right;margin-top:4px}
+
+.swk-report .swal2-actions{gap:8px}
+.swk-btn-primary{background:#1e8fa2 !important;border-radius:10px;padding:10px 16px;font-weight:700}
+.swk-btn-cancel{background:#8b97a6 !important;color:#fff !important;border-radius:10px;padding:10px 16px}
+
   </style>
 </head>
 <body>
@@ -302,6 +373,16 @@ $pageTitle = 'Forum — ' . ($catName ?: 'General') . ' — ' . ($p['title'] ?: 
           <div class="pf-action" style="display:inline-flex;align-items:center;gap:6px;">
             <span>👁</span><span class="pf-view-count"><?= (int)$p['views'] ?></span>
           </div>
+
+          <!-- REPORT -->
+<?php if ($canReportPost): ?>
+  <button type="button"
+          class="btn ghost danger"
+          data-act="report-post"
+          data-post-id="<?= (int)$p['post_id'] ?>"
+          title="Report this post">🚩 Report</button>
+<?php endif; ?>
+
         </div>
 
         <!-- Comments thread (always visible on this page) -->
@@ -405,31 +486,139 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ===== Comments: render helpers ===== */
-  function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-  function webPathFromAdmin(p){
-    if (!p) return '../uploads/default.png';
-    if (/^https?:\/\//i.test(p) || p.startsWith('/')) return p;
-    if (p.startsWith('uploads/')) return '../' + p;
-    return '../uploads/' + p.replace(/^\/+/, '');
-  }
-  function renderCommentItem(c){
-    const when = c.created_at ? esc(c.created_at) : 'Just now';
-    const pic  = webPathFromAdmin(c.profile_pic);
-    const name = esc(c.full_name || 'User');
-    const body = esc(c.body || '');
-    return `
-      <div class="comment-item" data-comment-id="${c.comment_id}">
-        <img src="${pic}" alt="" class="avatar" />
-        <div style="display:grid; gap:4px;">
+function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function webPathFromAdmin(p){
+  if (!p) return '../uploads/default.png';
+  if (/^https?:\/\//i.test(p) || p.startsWith('/')) return p;
+  if (p.startsWith('uploads/')) return '../' + p;
+  return '../uploads/' + p.replace(/^\/+/, '');
+}
+
+function renderCommentItem(c){
+  const when = c.created_at ? esc(c.created_at) : 'Just now';
+  const pic  = webPathFromAdmin(c.profile_pic);
+  const name = esc(c.full_name || 'User');
+  const body = esc(c.body || '');
+  const rc   = Number(c.replies_count || 0);
+
+  const isAdminAuthor = String(c.user_role || '').toLowerCase() === 'admin'; // ← needs API (see section C)
+  const isSelf        = Number(window.CURRENT_USER_ID || 0) === Number(c.user_id || 0);
+  const canReport     = !isSelf && !isAdminAuthor;
+
+  return `
+    <div class="comment-item"
+         data-comment-id="${c.comment_id}"
+         data-author-id="${c.user_id || ''}"
+         data-author-role="${c.user_role || ''}">
+      <img src="${pic}" alt="" class="avatar" />
+      <div style="display:grid; gap:6px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <strong>${name}</strong>
+          <span class="muted" style="font-size:.85em;">${when}</span>
+        </div>
+        <div style="white-space:pre-wrap; color:#2a515c;">${body}</div>
+
+        <div class="comment-actions" style="display:flex; gap:10px;">
+          <button type="button" class="btn" data-act="reply-toggle">↩️ Reply</button>
+          <button type="button" class="btn" data-act="show-replies" data-loaded="0" data-open="0">
+            Replies: <span class="rc">${rc}</span>
+          </button>
+          ${canReport ? `<button type="button" class="btn ghost danger" data-act="report-comment">🚩 Report</button>` : ``}
+        </div>
+
+        <form class="reply-form" data-post-id="${window.VIEW_POST_ID}"
+              data-parent-id="${c.comment_id}" style="display:none;">
+          <textarea name="body" rows="2" placeholder="Write a reply…" required></textarea>
+          <div class="reply-actions">
+            <button type="submit" class="btn primary">Reply</button>
+            <button type="button" class="btn" data-act="reply-cancel">Cancel</button>
+          </div>
+        </form>
+
+        <div class="comment-children" data-parent-id="${c.comment_id}" style="display:none; border-left:2px solid #e6f2f6; padding-left:12px;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderReplyItem(r){
+  const when = r.created_at ? esc(r.created_at) : 'Just now';
+  const pic  = webPathFromAdmin(r.profile_pic);
+  const name = esc(r.full_name || 'User');
+  const body = esc(r.body || '');
+
+  // Prefer server-provided r.can_report (naka-implement na sa forum_comment_children.php)
+  // Fallback: compute on client kung sakaling wala
+  const canReport = (typeof r.can_report !== 'undefined')
+    ? !!r.can_report
+    : (Number(window.CURRENT_USER_ID || 0) !== Number(r.user_id || 0) &&
+       String(r.user_role || '').toLowerCase() !== 'admin');
+
+  return `
+    <div class="comment-item reply" data-comment-id="${r.comment_id}" style="border-color:#eef6f8;">
+      <img src="${pic}" alt="" class="avatar" style="width:32px;height:32px;" />
+      <div style="display:grid; gap:6px;">
+        <div class="c-head">
           <div style="display:flex; gap:8px; align-items:center;">
             <strong>${name}</strong>
-            <span class="muted" style="font-size:.85em;">${when}</span>
+            <span class="muted" style="font-size:.82em;">${when}</span>
           </div>
-          <div style="white-space:pre-wrap; color:#2a515c;">${body}</div>
+          ${canReport
+            ? `<button type="button" class="btn icon ghost danger"
+                       data-act="report-comment" title="Report this reply">🚩</button>`
+            : ``}
         </div>
+
+        <div style="white-space:pre-wrap; color:#2a515c;">${body}</div>
       </div>
-    `;
+    </div>
+  `;
+}
+
+async function loadRepliesFor(parentId, { open = true } = {}) {
+  const card   = document.querySelector(`.comment-item[data-comment-id="${CSS.escape(String(parentId))}"]`);
+  if (!card) return;
+
+  const btn    = card.querySelector('[data-act="show-replies"]');
+  const box    = card.querySelector('.comment-children');
+  const rcSpan = btn?.querySelector('.rc');
+  if (!btn || !box) return;
+
+  // fetch once
+  if (btn.getAttribute('data-loaded') !== '1') {
+    try {
+      const fd  = new URLSearchParams({
+        post_id: String(window.VIEW_POST_ID || ''),
+        parent_id: String(parentId),
+        page: '1',
+        limit: '50'
+      });
+      const res = await fetch('forum_comment_children.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: fd.toString()
+      });
+      const data = await res.json();
+      if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+      box.innerHTML = data.replies.length
+        ? data.replies.map(renderReplyItem).join('')
+        : '<div class="muted" style="margin-left:2px;">No replies yet.</div>';
+
+      btn.setAttribute('data-loaded', '1');
+    } catch (err) {
+      console.error('loadRepliesFor failed', err);
+      return;
+    }
   }
+
+  // show by default
+  if (open) {
+    box.style.display = '';
+    btn.setAttribute('data-open', '1');
+    btn.innerHTML = `Hide replies (<span class="rc">${rcSpan?.textContent || '0'}</span>)`;
+  }
+}
 
   /* ===== Load first page of comments on page load ===== */
   (async function loadFirstComments(){
@@ -455,6 +644,9 @@ document.addEventListener('DOMContentLoaded', () => {
       list.innerHTML = data.comments.length
         ? data.comments.map(renderCommentItem).join('')
         : '<div class="muted">No comments yet. Be the first to comment.</div>';
+        // Auto-load & expand replies for parents that have them
+const parentsWithReplies = data.comments.filter(c => Number(c.replies_count || 0) > 0);
+await Promise.all(parentsWithReplies.map(c => loadRepliesFor(c.comment_id, { open: true })));
 
       if (data.has_more) {
         more.style.display = '';
@@ -467,6 +659,167 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error(err);
     }
   })();
+
+  // 2-step report modal: confirm -> reason form
+async function promptReportTwoStep({ type, id }) {
+  // STEP 1: quick confirm
+  const c = await Swal.fire({
+    icon: 'warning',
+    title: `Report this ${type === 'comment' ? 'comment' : 'post'}?`,
+    text: 'Do you want to send a report for review?',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, report',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#1e8fa2'
+  });
+  if (!c.isConfirmed) return;
+
+  // STEP 2: reason + notes
+ // STEP 2: reason + notes (polished)
+const html = `
+  <div class="report-form">
+    <div class="label">Reason</div>
+
+    <label class="radio">
+      <input type="radio" name="r-reason" value="spam" checked>
+      <span>Spam / Scam</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="r-reason" value="offensive">
+      <span>Offensive / Profanity</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="r-reason" value="harassment">
+      <span>Harassment / Bullying</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="r-reason" value="hate">
+      <span>Hate Speech</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="r-reason" value="nsfw">
+      <span>NSFW / Sexual Content</span>
+    </label>
+    <label class="radio">
+      <input type="radio" name="r-reason" value="other">
+      <span>Other (please specify)</span>
+    </label>
+    <div id="other-wrap" style="display:none; margin:6px 0 12px 28px">
+      <input id="r-other" type="text" placeholder="Type the reason…" />
+    </div>
+
+    <div class="label">Notes <span style="font-weight:500;color:#6b7f86">(optional)</span></div>
+    <textarea id="r-notes" maxlength="500" placeholder="Add details, quotes, or context…"></textarea>
+    <div id="r-notes-count" class="count">0/500</div>
+    <div class="hint">Your report is anonymous to other users.</div>
+  </div>
+`;
+
+const { value: form } = await Swal.fire({
+  title: 'Report details',
+  html,
+  focusConfirm: false,
+  showCancelButton: true,
+  confirmButtonText: 'Submit report',
+  cancelButtonText: 'Back',
+  customClass: {
+    popup: 'swk-report',
+    confirmButton: 'swk-btn-primary',
+    cancelButton: 'swk-btn-cancel'
+  },
+  didOpen: () => {
+    const notes = document.getElementById('r-notes');
+    const counter = document.getElementById('r-notes-count');
+    const otherWrap = document.getElementById('other-wrap');
+    const otherInput = document.getElementById('r-other');
+
+    // Show "Other" textbox only when selected
+    document.querySelectorAll('input[name="r-reason"]').forEach(r => {
+      r.addEventListener('change', () => {
+        otherWrap.style.display = (r.value === 'other' && r.checked) ? '' : 'none';
+      });
+    });
+
+    // Live counter
+    const update = () => { counter.textContent = `${(notes.value||'').length}/500`; };
+    notes.addEventListener('input', update); update();
+  },
+  preConfirm: () => {
+    const chosen = [...document.querySelectorAll('input[name="r-reason"]')]
+      .find(x => x.checked)?.value || '';
+    const notes = (document.getElementById('r-notes') || {}).value || '';
+    const other = (document.getElementById('r-other') || {}).value || '';
+
+    if (!chosen) { Swal.showValidationMessage('Please select a reason.'); return false; }
+    if (chosen === 'other' && other.trim().length < 4) {
+      Swal.showValidationMessage('Please specify your reason (at least 4 characters).');
+      return false;
+    }
+    return { reason: chosen, notes, other_text: other.trim() };
+  }
+});
+if (!form) return;
+
+// Build payload (include other_text if present)
+const fd = new URLSearchParams();
+fd.set('type', type);           // 'post' | 'comment'
+fd.set('id', String(id));
+fd.set('reason', form.reason);
+fd.set('notes', form.notes);
+if (form.other_text) fd.set('other_text', form.other_text);
+
+  try {
+    const res  = await fetch('forum_report_create.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: fd.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to submit report');
+    Swal.fire({
+      icon: 'success',
+      title: 'Thanks for the report',
+      text: 'Our moderators will review this shortly.',
+      confirmButtonColor: '#1e8fa2'
+    });
+  } catch (err) {
+    Swal.fire({ icon:'error', title:'Could not send report', text:String(err), confirmButtonColor:'#1e8fa2' });
+  }
+}
+// Post-level report (with guard)
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act="report-post"]');
+  if (!b) return;
+
+  const isSelf   = Number(window.CURRENT_USER_ID || 0) === Number(window.POST_AUTHOR_ID || 0);
+  const isAdminP = String(window.POST_AUTHOR_ROLE || '').toLowerCase() === 'admin';
+  if (isSelf || isAdminP) {
+    Swal.fire({icon:'info', title:'Not allowed', text:"You can't report your own post or an admin post.", confirmButtonColor:'#1e8fa2'});
+    return;
+  }
+  promptReportTwoStep({ type: 'post', id: b.dataset.postId });
+});
+
+
+// Comment-level report
+// Comment-level report (with guard)
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act="report-comment"]');
+  if (!b) return;
+  const card = b.closest('.comment-item');
+  if (!card) return;
+
+  const authorId   = Number(card.dataset.authorId || 0);
+  const authorRole = String(card.dataset.authorRole || '').toLowerCase();
+  const isSelf     = Number(window.CURRENT_USER_ID || 0) === authorId;
+  const isAdminC   = authorRole === 'admin';
+
+  if (isSelf || isAdminC) {
+    Swal.fire({icon:'info', title:'Not allowed', text:"You can't report your own comment or an admin comment.", confirmButtonColor:'#1e8fa2'});
+    return;
+  }
+  promptReportTwoStep({ type: 'comment', id: card.dataset.commentId });
+});
 
   /* ===== Load more comments ===== */
   document.addEventListener('click', async (e) => {
@@ -566,7 +919,139 @@ document.addEventListener('DOMContentLoaded', () => {
       /* silent fail; page still works */
     }
   })();
+
+  // Toggle inline reply form
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act="reply-toggle"]');
+  if (!btn) return;
+  const card = btn.closest('.comment-item');
+  const form = card?.querySelector('.reply-form');
+  if (!form) return;
+  form.style.display = (form.style.display === 'none' || !form.style.display) ? '' : 'none';
+  if (form.style.display !== 'none') form.querySelector('textarea')?.focus();
 });
+
+// Cancel reply
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act="reply-cancel"]');
+  if (!btn) return;
+  const form = btn.closest('.reply-form');
+  if (!form) return;
+  const ta = form.querySelector('textarea'); if (ta) ta.value = '';
+  form.style.display = 'none';
+});
+
+// Show/Hide replies toggle (lazy-load on first click)
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act="show-replies"]');
+  if (!btn) return;
+  const card = btn.closest('.comment-item');
+  const parentId = card?.dataset.commentId;
+  const postId   = String(window.VIEW_POST_ID || '');
+  const box      = card?.querySelector('.comment-children');
+  const rcSpan   = btn.querySelector('.rc');
+
+  if (!parentId || !box) return;
+
+  const loaded = btn.getAttribute('data-loaded') === '1';
+  const open   = btn.getAttribute('data-open') === '1';
+
+  // First time: fetch replies
+  if (!loaded) {
+    btn.disabled = true; const old = btn.textContent; btn.textContent = 'Loading…';
+    try {
+      const fd = new URLSearchParams({ post_id: postId, parent_id: parentId, page: '1', limit: '20' });
+      const res  = await fetch('forum_comment_children.php', {
+        method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: fd.toString()
+      });
+      const data = await res.json();
+      if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+      box.innerHTML = data.replies.length
+        ? data.replies.map(renderReplyItem).join('')
+        : '<div class="muted" style="margin-left:2px;">No replies yet.</div>';
+
+      btn.setAttribute('data-loaded', '1');
+    } catch (err) {
+      Swal.fire({ icon:'error', title:'Failed to load replies', text:String(err), confirmButtonColor:'#1e8fa2' });
+      return;
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
+  }
+
+  // Toggle visibility
+  if (!open) {
+    box.style.display = '';
+    btn.setAttribute('data-open', '1');
+    btn.innerHTML = `Hide replies (<span class="rc">${rcSpan?.textContent || '0'}</span>)`;
+  } else {
+    box.style.display = 'none';
+    btn.setAttribute('data-open', '0');
+    btn.innerHTML = `Replies: <span class="rc">${rcSpan?.textContent || '0'}</span>`;
+  }
+});
+
+// Submit a reply
+document.addEventListener('submit', async (e) => {
+  const form = e.target.closest('.reply-form');
+  if (!form) return;
+  e.preventDefault();
+
+  if (form.dataset.busy === '1') return;
+  form.dataset.busy = '1';
+
+  const postId   = form.getAttribute('data-post-id');
+  const parentId = form.getAttribute('data-parent-id');
+  const ta       = form.querySelector('textarea[name="body"]');
+  const bodyText = (ta?.value || '').trim();
+  const card     = form.closest('.comment-item');
+  const box      = card?.querySelector('.comment-children');
+  const toggle   = card?.querySelector('[data-act="show-replies"]');
+  const rcSpan   = toggle?.querySelector('.rc');
+  const postCountEl = document.querySelector('.pf-comment-count');
+
+  if (!bodyText) { form.dataset.busy = '0'; return; }
+
+  const btn = form.querySelector('button[type="submit"]');
+  const old = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = 'Replying…'; }
+
+  try {
+    const fd = new URLSearchParams({ post_id: postId, parent_comment_id: parentId, body: bodyText });
+    const res  = await fetch('forum_comment_create.php', {
+      method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: fd.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+    // ensure replies box visible
+    if (box.style.display === 'none' || !box.innerHTML.trim()) {
+      box.style.display = '';
+    }
+    // append the new reply
+    box.insertAdjacentHTML('beforeend', renderReplyItem(data.comment));
+
+    // bump replies pill
+    if (rcSpan) rcSpan.textContent = String((parseInt(rcSpan.textContent||'0',10)||0) + 1);
+
+    // bump post-level 💬 counter
+    if (postCountEl) postCountEl.textContent = String((parseInt(postCountEl.textContent||'0',10)||0) + 1);
+
+    // clear + hide form
+    if (ta) ta.value = '';
+    form.style.display = 'none';
+  } catch (err) {
+    Swal.fire({ icon:'error', title:'Reply failed', text:String(err), confirmButtonColor:'#1e8fa2' });
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = old || 'Reply'; }
+    form.dataset.busy = '0';
+  }
+});
+});
+
 </script>
 </body>
 </html>

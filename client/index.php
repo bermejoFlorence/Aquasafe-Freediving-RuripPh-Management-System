@@ -1,26 +1,89 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'client') {
-    echo "<!DOCTYPE html>
-    <html><head>
-    <meta charset='UTF-8'>
-    <title>Access Denied</title>
-    <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>
-    </head><body>
-    <script>
-    Swal.fire({
-        icon: 'error',
-        title: 'Access Denied',
-        text: 'You do not have permission to access this page.',
-        confirmButtonColor: '#1e8fa2'
-    }).then(() => { window.location = '../login.php'; });
-    </script>
-    </body></html>";
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// 0) Must be logged in as client
+if (!isset($_SESSION['user_id']) || (($_SESSION['role'] ?? '') !== 'client')) {
+    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Access Denied</title>
+          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
+          <script>
+            Swal.fire({icon:'error',title:'Access Denied',text:'You do not have permission to access this page.',confirmButtonColor:'#1e8fa2'})
+              .then(()=>{ window.location='../login.php'; });
+          </script></body></html>";
     exit;
+}
+
+require_once '../db_connect.php'; // keep this single include here
+
+$uid = (int)$_SESSION['user_id'];
+$stmt = $conn->prepare("
+    SELECT account_status, banned_until, banned_reason, session_version
+    FROM user
+    WHERE user_id = ?
+    LIMIT 1
+");
+$stmt->bind_param("i", $uid);
+$stmt->execute();
+$stmt->bind_result($status, $bannedUntil, $bannedReason, $dbSessVer);
+$stmt->fetch();
+$stmt->close();
+
+// 1) Live-kick if admin changed session_version (e.g., ban issued now)
+if ((int)($dbSessVer ?? 0) !== (int)($_SESSION['session_version'] ?? 0)) {
+    session_unset(); session_destroy();
+    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Signed out</title>
+          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
+          <script>
+            Swal.fire({icon:'info',title:'Session ended',html:'Your session was updated by an administrator. Please sign in again.',confirmButtonColor:'#1e8fa2'})
+              .then(()=>{ window.location='../login.php'; });
+          </script></body></html>";
+    exit;
+}
+
+// 2) Block suspended or currently-banned accounts
+$stillBanned = ($status === 'banned') && (
+    empty($bannedUntil) || $bannedUntil === '0000-00-00 00:00:00' || strtotime($bannedUntil) > time()
+);
+
+if ($status === 'suspended' || $stillBanned) {
+    $reason = htmlspecialchars((string)$bannedReason, ENT_QUOTES, 'UTF-8');
+    $untilText = $bannedUntil
+        ? date('M j, Y g:ia', strtotime($bannedUntil))
+        : 'indefinite';
+
+    $title = ($status === 'suspended') ? 'Account suspended' : 'Account banned';
+    $lines = ($status === 'suspended')
+        ? 'Please contact the administrator.'
+        : 'You cannot use client features while banned.';
+    $reasonLine = $reason ? "<br><b>Reason:</b> {$reason}" : "";
+    $untilLine  = ($status === 'banned') ? "<br><b>Until:</b> {$untilText}" : "";
+
+    session_unset(); session_destroy();
+    echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>$title</title>
+          <script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script></head><body>
+          <script>
+            Swal.fire({
+              icon:'error',
+              title: ".json_encode($title).",
+              html: ".json_encode($lines.$reasonLine.$untilLine).",
+              confirmButtonColor:'#1e8fa2'
+            }).then(()=>{ window.location='../login.php'; });
+          </script></body></html>";
+    exit;
+}
+
+// 3) Optional: auto-unban if ban already expired (status shows 'banned' but date passed)
+if ($status === 'banned' && $bannedUntil && strtotime($bannedUntil) <= time()) {
+    $conn->query("
+        UPDATE user
+           SET account_status='active',
+               banned_until=NULL, banned_reason=NULL, banned_by=NULL, banned_at=NULL
+         WHERE user_id={$uid}
+    ");
 }
 ?>
 <?php
-include '../db_connect.php'; // adjust path if needed
 
 $packages = [];
 $sql = "SELECT 
@@ -484,18 +547,6 @@ body{
   object-fit: cover;
   object-position: center;
 }
-/* Left-align ONLY the feature lines (keep title & price centered) */
-.card p:not(.price){
-  justify-content: flex-start;   /* from center -> left */
-  text-align: left;
-  padding-left: 8px;             /* para hindi dikit sa gilid */
-}
-
-/* mas maaliwalas ang pagitan ng check icon at text */
-.card p:not(.price)::before{
-  margin-right: 10px;
-  margin-top: 2px;
-}
 
 </style>
 </head>
@@ -515,7 +566,7 @@ body{
     <div class="hc-track">
       <!-- Slide 1 -->
       <div class="hc-slide">
-        <img src="../uploads/hero/reef-1.jpg" alt="Open water session over coral reef">
+        <img src="../uploads/hero/reef-1.jpeg" alt="Open water session over coral reef">
         <div class="hc-overlay">
           <h2>Discover Breathtaking Reefs</h2>
           <p>Beginner-friendly, guided by certified coaches.</p>
@@ -846,6 +897,7 @@ document.getElementById('confirm-booking-btn').onclick = function() {
 
 </script>
 <script>
+
 (function () {
   const root = document.getElementById('heroCarousel');
   if (!root) return;
