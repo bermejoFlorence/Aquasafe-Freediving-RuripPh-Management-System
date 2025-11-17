@@ -1,7 +1,7 @@
 <!-- includes/sidebar.php -->
 <nav class="sidebar" id="sidebar">
     <div class="logo-area">
-        <img src="../uploads/logo.jpeg" alt="Logo" class="sidebar-logo">
+        <img src="/diving/uploads/logo.jpeg" alt="Logo" class="sidebar-logo">
     </div>
     <div class="sidebar-nav">
         <a href="index.php" class="<?php echo ($page == 'dashboard') ? 'active' : ''; ?>">
@@ -17,17 +17,23 @@
             <i class="fa-solid fa-comments"></i> Forum
         </a>
 
+        <!-- NEW: Reports (moderation) -->
+        <a href="reports.php" class="<?php echo ($page == 'reports') ? 'active' : ''; ?>">
+            <i class="fa-solid fa-flag"></i> Reports
+            <!-- optional badge container -->
+            <span id="reports-badge" style="display:none"
+                  class="badge-dot" title="Open reports"></span>
+        </a>
+
         <a href="payments.php" class="<?php echo ($page == 'payments') ? 'active' : ''; ?>">
             <i class="fa-solid fa-receipt"></i> Payments
         </a>
-
         <a href="users.php" class="<?php echo ($page == 'users') ? 'active' : ''; ?>">
             <i class="fa-solid fa-users"></i> Users
         </a>
         <a href="packages.php" class="<?php echo ($page == 'packages') ? 'active' : ''; ?>">
             <i class="fa-solid fa-box"></i> Packages
         </a>
-
     </div>
 </nav>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
