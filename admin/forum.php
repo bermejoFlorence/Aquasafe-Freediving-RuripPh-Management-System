@@ -500,11 +500,11 @@ if ($st && $st->execute()) {
               <i class="fa-solid fa-magnifying-glass"></i>
               <input type="text" placeholder="Search posts, tags, people…">
             </div>
-            <select class="forum-sort">
+            <!-- <select class="forum-sort">
               <option>Newest</option><option>Most Liked</option>
               <option>Most Commented</option><option>Unanswered</option>
               <option>Bookmarked</option>
-            </select>
+            </select> -->
           </div>
         </div>
 
@@ -721,27 +721,10 @@ if ($st && $st->execute()) {
       </div>
     </div>
   </div>
-<!-- Server-rendered categories (keep as-is dahil may PHP) -->
-<script>
-  window.CATS = <?= json_encode($cats, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-</script>
 
 <script>
-// ===== Helpers (shared) =====
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function webPathFromAdmin(p){
-  if (!p) return '../uploads/default.png';
-  if (/^https?:\/\//i.test(p) || p.startsWith('/')) return p;
-  if (p.startsWith('uploads/')) return '../' + p;
-  return '../uploads/' + p.replace(/^\/+/, '');
-}
-function show(el){ el && (el.style.display = ''); }
-function hide(el){ el && (el.style.display = 'none'); }
-
-// ===== Ready =====
+// 1) Chips row: vertical wheel -> horizontal scroll + sidebar toggles
 document.addEventListener('DOMContentLoaded', () => {
-  // 1) Chips row: vertical wheel -> horizontal scroll + sidebar toggles
   const row = document.getElementById('chipsRow');
   row?.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { row.scrollLeft += e.deltaY; e.preventDefault(); }
@@ -773,19 +756,36 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('keydown', (e) => { if (e.key === "Escape" && sidebar?.classList.contains('open')) closeSidebar(); });
   window.addEventListener('resize', () => { if (window.innerWidth > 700) closeSidebar(); });
+});
 
-  // 2) Manage Categories (Add / Edit / Delete)
+// 2) Expose categories from PHP (keep this exactly)
+window.CATS = <?= json_encode($cats, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
+</script>
+
+<script>
+// 3) Manage (Add inside modal + Edit + Delete) via unified endpoint
+document.addEventListener('DOMContentLoaded', () => {
   const chipsRow = document.getElementById('chipsRow');
+
   const mOverlay = document.getElementById('manageCatModal');
-  const mCard    = mOverlay?.querySelector('.modal-card');
+  const mCard    = mOverlay.querySelector('.modal-card');
   const btnMng   = document.getElementById('btnManageCats');
   const btnClose = document.getElementById('btnCloseManage');
   const list     = document.getElementById('manageList');
+
+  // Add form inside Manage modal
   const mAddForm = document.getElementById('mAddForm');
   const mAddName = document.getElementById('mAddName');
 
+  function openManage(){ renderList(); mCard.classList.remove('closing'); mOverlay.classList.add('show'); document.body.classList.add('modal-open'); }
+  function hideManageNow(){ mOverlay.classList.remove('show'); document.body.classList.remove('modal-open'); mCard.classList.remove('closing'); }
+  function closeManage(){ mCard.classList.add('closing'); const done=()=>{ mCard.removeEventListener('animationend',done); hideManageNow(); }; mCard.addEventListener('animationend',done); setTimeout(hideManageNow,260); }
+
+  btnMng?.addEventListener('click', openManage);
+  btnClose?.addEventListener('click', closeManage);
+  mOverlay?.addEventListener('click', (e)=>{ if (e.target === mOverlay) closeManage(); });
+
   function renderList(){
-    if (!list) return;
     list.innerHTML = '';
     (window.CATS || []).forEach(cat => {
       const row = document.createElement('div');
@@ -805,39 +805,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function openManage(){
-    if (!mOverlay || !mCard) return;
-    renderList();
-    mCard.classList.remove('closing');
-    mOverlay.classList.add('show');
-    document.body.classList.add('modal-open');
-  }
-  function hideManageNow(){
-    if (!mOverlay || !mCard) return;
-    mOverlay.classList.remove('show');
-    document.body.classList.remove('modal-open');
-    mCard.classList.remove('closing');
-  }
-  function closeManage(){
-    if (!mOverlay || !mCard) return;
-    mCard.classList.add('closing');
-    const done=()=>{ mCard.removeEventListener('animationend',done); hideManageNow(); };
-    mCard.addEventListener('animationend',done);
-    setTimeout(hideManageNow,260);
-  }
-
-  btnMng?.addEventListener('click', openManage);
-  btnClose?.addEventListener('click', closeManage);
-  mOverlay?.addEventListener('click', (e)=>{ if (e.target === mOverlay) closeManage(); });
-
   // Edit / Delete handlers
-  list?.addEventListener('click', async (e)=>{
+  list.addEventListener('click', async (e)=>{
     const b = e.target.closest('button.btn'); if (!b) return;
     const id  = b.dataset.id;
     const act = b.dataset.act;
     const cat = (window.CATS || []).find(c => String(c.category_id) === String(id));
     if (!cat) return;
 
+    // ----- EDIT -----
     if (act === 'edit') {
       const res = await Swal.fire({
         title:'Rename category',
@@ -861,7 +837,8 @@ document.addEventListener('DOMContentLoaded', () => {
         cat.name = d.category.name;
         cat.slug = d.category.slug;
 
-        const chipEl = chipsRow?.querySelector(`.chip[data-cat="${CSS.escape(oldSlug)}"]`);
+        const chip = chipsRow.querySelector(`.a.chip[data-cat="${CSS.escape(oldSlug)}"], .chip[data-cat="${CSS.escape(oldSlug)}"]`);
+        const chipEl = chipsRow.querySelector(`.chip[data-cat="${CSS.escape(oldSlug)}"]`);
         if (chipEl) {
           chipEl.dataset.cat = cat.slug;
           chipEl.textContent = cat.name;
@@ -873,6 +850,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList();
         Swal.fire({ icon:'success', title:'Renamed', timer:1000, showConfirmButton:false });
 
+        // Optional: if currently on that category, update "Posting to:" and URL without reload
         try {
           const urlParams = new URLSearchParams(location.search);
           const currentSlug = urlParams.get('cat') || 'all';
@@ -887,6 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    // ----- DELETE -----
     if (act === 'delete') {
       const ok = await Swal.fire({
         icon:'warning', title:`Delete "${cat.name}"?`,
@@ -903,8 +882,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const d  = await r.json().catch(()=>null);
         if (!r.ok || !d || !d.ok) throw new Error((d && d.message) || `HTTP ${r.status}`);
 
+        // remove from cache + chips
         window.CATS = (window.CATS || []).filter(c => String(c.category_id) !== String(id));
-        const chip = chipsRow?.querySelector(`.chip[data-cat="${CSS.escape(cat.slug)}"]`);
+        const chip = chipsRow.querySelector(`.chip[data-cat="${CSS.escape(cat.slug)}"]`);
         chip?.remove();
 
         renderList();
@@ -915,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Add inside Manage modal
+  // ----- ADD inside Manage modal -----
   mAddForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const v = (mAddName.value || '').trim();
@@ -931,12 +911,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       (window.CATS || (window.CATS=[])).push(d.category);
 
+      // Append new chip at the end of the scroll row (as a link)
       const chip = document.createElement('a');
       chip.className = 'chip';
       chip.dataset.cat = d.category.slug;
       chip.href = `forum.php?cat=${encodeURIComponent(d.category.slug)}`;
       chip.textContent = d.category.name;
-      chipsRow?.appendChild(chip);
+      chipsRow.appendChild(chip);
 
       renderList();
       mAddName.value = '';
@@ -946,11 +927,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 3) Compose: avatar, attach, submit post
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  /* ========== Avatar ========== */
   const me = window.CURRENT_USER || { profile_pic: '../uploads/default.png' };
   const meAvatar = document.getElementById('meAvatar');
   if (meAvatar && me.profile_pic) meAvatar.src = me.profile_pic;
 
+  /* ========== Attach files (inline) ========== */
   const form        = document.getElementById('composeForm');
   const fileInput   = document.getElementById('composeFiles');
   const btnAttach   = document.getElementById('btnAttach');
@@ -968,10 +956,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  /* ========== Submit Post (admin/forum_post_create.php) ========== */
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
-    // gamitin ang kasalukuyang filter sa URL bilang category (server-side value)
+
+    // gamitin ang kasalukuyang filter sa URL bilang category
     fd.set('category', '<?= $activeSlug ?>');
 
     const r = await fetch('forum_post_create.php', { method:'POST', body: fd });
@@ -987,32 +977,54 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // reset UI
     form.reset();
     if (attachCount){ attachCount.style.display = 'none'; attachCount.textContent = ''; }
 
     Swal.fire({ icon:'success', title:'Posted', timer:700, showConfirmButton:false });
-    setTimeout(() => { window.location.reload(); }, 750);
+    setTimeout(() => { window.location.reload(); }, 750); // stay on same ?cat
   });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const target = params.get('highlight');
+  if (!target) return;
 
-  // 4) Highlight a post if ?highlight=ID is present
-  (function(){
-    const params = new URLSearchParams(location.search);
-    const target = params.get('highlight');
-    if (!target) return;
-    const el = document.querySelector(`[data-post-id="${CSS.escape(target)}"]`);
-    if (el) {
-      el.scrollIntoView({behavior:'smooth', block:'center'});
-      el.style.transition = 'background 0.6s';
-      el.style.background = '#fff9d6';
-      setTimeout(()=> el.style.background = '', 1200);
-    }
-  })();
+  const el = document.querySelector(`[data-post-id="${CSS.escape(target)}"]`);
+  if (el) {
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.style.transition = 'background 0.6s';
+    el.style.background = '#fff9d6';
+    setTimeout(()=> el.style.background = '', 1200);
+  }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const target = params.get('highlight');
+  if (!target) return;
 
-  // 5) Like toggle (delegated)
-  document.addEventListener('click', async (e) => {
+  const el = document.querySelector(`[data-post-id="${CSS.escape(target)}"]`);
+  if (el) {
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.style.transition = 'background 0.6s';
+    el.style.background = '#fff9d6';
+    setTimeout(()=> el.style.background = '', 1200);
+  }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const root = document;
+
+  root.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-like');
     if (!btn) return;
 
+    // Prevent double-click spam
     if (btn.dataset.busy === '1') return;
     btn.dataset.busy = '1';
 
@@ -1020,6 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const likedNow = btn.classList.contains('liked');
     const postId   = btn.getAttribute('data-post-id');
 
+    // Optimistic UI
     let oldCount = parseInt(countEl?.textContent || '0', 10);
     let newCount = likedNow ? Math.max(oldCount - 1, 0) : oldCount + 1;
     countEl.textContent = String(newCount);
@@ -1036,12 +1049,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
 
+      // Sync with server truth
       countEl.textContent = String(data.likes_count ?? newCount);
       btn.classList.toggle('liked', !!data.liked);
       btn.setAttribute('aria-label', data.liked ? 'Unlike' : 'Like');
       btn.setAttribute('title',      data.liked ? 'Unlike' : 'Like');
       btn.dataset.liked = data.liked ? '1' : '0';
     } catch (err) {
+      // Revert optimistic UI on error
       countEl.textContent = String(oldCount);
       btn.classList.toggle('liked', likedNow);
       btn.setAttribute('aria-label', likedNow ? 'Unlike' : 'Like');
@@ -1051,10 +1066,20 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.dataset.busy = '0';
     }
   });
-
-  // 6) Comments: toggle, lazy load, load-more, submit
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // small helpers
+  function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function webPathFromAdmin(p){
+    if (!p) return '../uploads/default.png';
+    if (/^https?:\/\//i.test(p) || p.startsWith('/')) return p;
+    if (p.startsWith('uploads/')) return '../' + p;
+    return '../uploads/' + p.replace(/^\/+/, '');
+  }
   function renderCommentItem(c){
-    const when = esc(c.created_at || 'Just now');
+    const when = c.created_at ? esc(c.created_at) : 'Just now';
     const pic  = webPathFromAdmin(c.profile_pic);
     const name = esc(c.full_name || 'User');
     const body = esc(c.body || '');
@@ -1072,7 +1097,98 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // Open/close & first load
+  // delegated submit para sa lahat ng comment forms
+  document.addEventListener('submit', async (e) => {
+    const form = e.target.closest('.comment-form');
+    if (!form) return;
+    e.preventDefault();
+
+    // prevent double submit
+    if (form.dataset.busy === '1') return;
+    form.dataset.busy = '1';
+
+    const postId   = form.getAttribute('data-post-id');
+    const textarea = form.querySelector('textarea[name="body"]');
+    const bodyText = (textarea?.value || '').trim();
+
+    if (!bodyText) {
+      form.dataset.busy = '0';
+      return;
+    }
+
+    // optimistic UX: disable button
+    const btn = form.querySelector('button[type="submit"]');
+    const oldBtnText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+
+    try {
+      // send
+      const fd = new URLSearchParams();
+      fd.set('post_id', postId);
+      fd.set('body', bodyText);
+
+      const res = await fetch('forum_comment_create.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: fd.toString()
+      });
+      const data = await res.json();
+      if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+
+      // append new comment
+      const list = document.getElementById('comments-' + postId);
+      if (list) {
+        list.insertAdjacentHTML('afterbegin', renderCommentItem(data.comment));
+      }
+
+      // increment 💬 counter in the same post card
+      const postEl = form.closest('article.post');
+      const cEl = postEl?.querySelector('.pf-comment-count');
+      if (cEl) {
+        const n = parseInt(cEl.textContent || '0', 10);
+        cEl.textContent = String((isNaN(n) ? 0 : n) + 1);
+      }
+
+      // reset field
+      if (textarea) textarea.value = '';
+    } catch (err) {
+      Swal.fire({ icon:'error', title:'Comment failed', text:String(err), confirmButtonColor:'#1e8fa2' });
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = oldBtnText || 'Post Comment'; }
+      form.dataset.busy = '0';
+    }
+  });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function webPathFromAdmin(p){
+    if (!p) return '../uploads/default.png';
+    if (/^https?:\/\//i.test(p) || p.startsWith('/')) return p;
+    if (p.startsWith('uploads/')) return '../' + p;
+    return '../uploads/' + p.replace(/^\/+/, '');
+  }
+  function renderCommentItem(c){
+    return `
+      <div class="comment-item" data-comment-id="${c.comment_id}"
+           style="display:grid; grid-template-columns:auto 1fr; gap:10px; border:1px solid #e8f3f6; border-radius:10px; padding:10px;">
+        <img src="${webPathFromAdmin(c.profile_pic)}" class="avatar"
+             style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid #cfe5ea;" alt="">
+        <div style="display:grid; gap:4px;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <strong>${esc(c.full_name || 'User')}</strong>
+            <span class="muted" style="font-size:.85em;">${esc(c.created_at || 'Just now')}</span>
+          </div>
+          <div style="white-space:pre-wrap; color:#2a515c;">${esc(c.body || '')}</div>
+        </div>
+      </div>
+    `;
+  }
+  function show(el){ el && (el.style.display = ''); }
+  function hide(el){ el && (el.style.display = 'none'); }
+
+  // Toggle comments panel on 💬
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.btn-comments');
     if (!btn) return;
@@ -1081,6 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const wrap   = document.querySelector(`.comments-wrap[data-post-id="${CSS.escape(postId)}"]`);
     if (!wrap) return;
 
+    // toggle
     const isOpen = wrap.style.display !== 'none';
     if (isOpen) {
       hide(wrap);
@@ -1090,12 +1207,15 @@ document.addEventListener('DOMContentLoaded', () => {
     show(wrap);
     btn.setAttribute('aria-expanded', 'true');
 
+    // first-open lazy load
     if (wrap.dataset.loaded === '1') return;
     wrap.dataset.loaded = '1';
 
     const list = wrap.querySelector('.comments-list');
     const more = wrap.querySelector('.comments-more');
+    const loadBtn = more?.querySelector('[data-act="load-more"]');
 
+    // simple loading placeholder
     list.innerHTML = '<div class="muted">Loading comments…</div>';
 
     try {
@@ -1112,10 +1232,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
 
+      // render
       list.innerHTML = data.comments.length
         ? data.comments.map(renderCommentItem).join('')
         : '<div class="muted">No comments yet. Be the first to comment.</div>';
 
+      // load-more state
       if (data.has_more) {
         show(more); more.dataset.nextPage = data.next_page;
       } else {
@@ -1169,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Submit comment (delegated; single handler only)
+  // Submit comment (re-use of Step 3 logic but now inside hidden panel)
   document.addEventListener('submit', async (e) => {
     const form = e.target.closest('.comment-form');
     if (!form) return;
@@ -1202,8 +1324,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (!res.ok || !data || !data.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
 
+      // prepend newest comment
       list?.insertAdjacentHTML('beforeend', renderCommentItem(data.comment));
 
+      // increment 💬 counter in footer
       const postEl = form.closest('article.post');
       const cEl = postEl?.querySelector('.pf-comment-count');
       if (cEl) { cEl.textContent = String((parseInt(cEl.textContent||'0',10) || 0) + 1); }
