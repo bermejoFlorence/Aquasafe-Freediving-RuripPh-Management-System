@@ -13,15 +13,24 @@ if (!isset($_SESSION['user_id']) || (($_SESSION['role'] ?? '') !== 'admin')) {
 
 require_once '../db_connect.php';
 
-/** PHPMailer (same as your payment flow) */
+/** PHPMailer */
 require_once '../PHPMailer/src/Exception.php';
 require_once '../PHPMailer/src/PHPMailer.php';
 require_once '../PHPMailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-function jfail($msg, $code=400){ http_response_code($code); echo json_encode(['ok'=>false,'message'=>$msg]); exit; }
-function jok($data=[]){ echo json_encode(array_merge(['ok'=>true], $data)); exit; }
+function jfail($msg, $code=400){
+  http_response_code($code);
+  header('Content-Type: application/json');
+  echo json_encode(['ok' => false, 'message' => $msg]);
+  exit;
+}
+function jok($data=[]){
+  header('Content-Type: application/json');
+  echo json_encode(array_merge(['ok' => true], $data));
+  exit;
+}
 function now(){ return date('Y-m-d H:i:s'); }
 function safe_note($s){ $s = trim($s ?? ''); return mb_substr($s, 0, 1000); } // cap note length
 
@@ -32,12 +41,12 @@ $reportId = (int)($_POST['report_id'] ?? 0);
 $noteIn   = safe_note($_POST['note'] ?? '');
 $hide     = (int)($_POST['hide'] ?? 0);
 $hours    = (int)($_POST['deadline_hours'] ?? 48);
+
 // Ban duration options coming from the modal
 $banDays   = isset($_POST['ban_days'])  ? max(0, (int)$_POST['ban_days'])  : 0;
 $banHours  = isset($_POST['ban_hours']) ? max(0, (int)$_POST['ban_hours']) : 0;
 $permanent = !empty($_POST['permanent']) ? 1 : 0;
 $adminId   = (int)($_SESSION['user_id'] ?? 0); // for banned_by, logs
-
 
 if (!$reportId || !in_array($action, ['notify_start','resolve','ban_now'], true)) {
   jfail('Invalid parameters');
@@ -88,18 +97,28 @@ function add_notif(mysqli $conn, int $userId, string $type, string $message, int
   $st->close();
 }
 function mailer(): PHPMailer {
-  $mail = new PHPMailer(true);
-  // === copy your payment SMTP settings here ===
-  $mail->isSMTP();
-  $mail->Host       = 'smtp.gmail.com';
-  $mail->SMTPAuth   = true;
-  $mail->Username   = 'markson.carino@cbsua.edu.ph';      // same as payment flow
-  $mail->Password   = 'wzzc jkhk bejh xqoe';               // same app password
-  $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-  $mail->Port       = 587;
-  $mail->setFrom('markson.carino@cbsua.edu.ph', 'AquaSafe RuripPH');
-  $mail->isHTML(true);
-  return $mail;
+    $mail = new PHPMailer(true);
+    $mail->isSMTP();
+
+    // 🔹 Hostinger SMTP – PALITAN nang tama
+    $mail->Host       = 'smtp.hostinger.com';
+    $mail->SMTPAuth   = true;
+    $mail->Username   = 'no-reply@YOURDOMAIN.com';   // TODO: palitan sa tunay na email
+    $mail->Password   = 'YOUR_EMAIL_PASSWORD';       // TODO: palitan sa tunay na password
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port       = 587;
+
+    $mail->setFrom('no-reply@YOURDOMAIN.com', 'AquaSafe RuripPH'); // TODO: match sa Username
+    $mail->isHTML(true);
+    $mail->CharSet = 'UTF-8';
+
+    // Debug output papunta sa error_log
+    $mail->SMTPDebug  = 0; // gawin mong 2 kung gusto mo makita full SMTP log sa error_log
+    $mail->Debugoutput = function($str, $level) {
+        error_log("PHPMailer debug[$level]: $str");
+    };
+
+    return $mail;
 }
 function reason_label($r){
   if (!$r) return '—';
@@ -116,6 +135,7 @@ function short_excerpt($s, $len=140){
 }
 
 /** Switch actions */
+
 if ($action === 'notify_start') {
   $deadline = date('Y-m-d H:i:s', time() + max(1,$hours)*3600);
 
@@ -138,18 +158,17 @@ if ($action === 'notify_start') {
   $title     = $isComment ? ('Comment #'.$rep['target_id']) : ($rep['post_title'] ?: 'Your Post');
   $reason    = reason_label($rep['reason']);
 
-  // Notification row
+  // Notification row (in-app)
   $notifMsg = "Your ".($isComment?'comment':'post')." was reported (reason: $reason). "
             . "Please comply within 48 hours or your account may be banned.";
   add_notif($conn, (int)$rep['target_user_id'], 'report_notice', $notifMsg, $reportId);
 
   // Send email
-  try {
-    $mail = mailer();
-    $mail->addAddress($rep['target_email'], $rep['target_full_name']);
-    $mail->Subject = "Action required: Your ".($isComment?'comment':'post')." was reported (Report #{$rep['report_id']})";
-    $deadlineFmt = date('M j, Y g:ia', strtotime($deadline));
-    $mail->Body = "
+  $mail = mailer();
+  $mail->addAddress($rep['target_email'], $rep['target_full_name'] ?? '');
+  $mail->Subject = "Action required: Your ".($isComment?'comment':'post')." was reported (Report #{$rep['report_id']})";
+  $deadlineFmt = date('M j, Y g:ia', strtotime($deadline));
+  $mail->Body = "
       Hi <b>".htmlspecialchars($rep['target_full_name'])."</b>,<br><br>
       Your ".($isComment?'comment':'post')." has been <b>reported</b> and is now under review.<br>
       <b>Reason:</b> ".htmlspecialchars($reason)."<br>
@@ -159,10 +178,11 @@ if ($action === 'notify_start') {
       If no action is taken by the deadline, your account may be banned.<br><br>
       You can reply to this email if you want to appeal or provide context.<br><br>
       — AquaSafe RuripPH Moderation
-    ";
-    $mail->send();
-  } catch (Exception $e) {
-    // Optional: log $mail->ErrorInfo
+  ";
+
+  if (!$mail->send()) {
+      error_log('Report mail error (notify_start): '.$mail->ErrorInfo);
+      jfail('Mail error (notify_start): '.$mail->ErrorInfo, 500);
   }
 
   jok(['status'=>'under_review','deadline'=>$deadline]);
@@ -180,22 +200,30 @@ if ($action === 'resolve') {
 
   append_note($conn, $reportId, $noteIn);
 
-  // Notify reported user (and optionally the reporter)
-  add_notif($conn, (int)$rep['target_user_id'], 'report_resolved',
-            'Your reported item has been resolved. Thank you for complying.', $reportId);
+  // Notify reported user (in-app)
+  add_notif(
+      $conn,
+      (int)$rep['target_user_id'],
+      'report_resolved',
+      'Your reported item has been resolved. Thank you for complying.',
+      $reportId
+  );
 
-  try {
-    $mail = mailer();
-    $mail->addAddress($rep['target_email'], $rep['target_full_name']);
-    $mail->Subject = "Resolved: Report #{$rep['report_id']}";
-    $mail->Body = "
+  // Email
+  $mail = mailer();
+  $mail->addAddress($rep['target_email'], $rep['target_full_name'] ?? '');
+  $mail->Subject = "Resolved: Report #{$rep['report_id']}";
+  $mail->Body = "
       Hi <b>".htmlspecialchars($rep['target_full_name'])."</b>,<br><br>
       Your case (Report #{$rep['report_id']}) has been <b>resolved</b>.<br>
       Thank you for your cooperation.<br><br>
       — AquaSafe RuripPH Moderation
-    ";
-    $mail->send();
-  } catch (Exception $e) {}
+  ";
+
+  if (!$mail->send()) {
+      error_log('Report mail error (resolve): '.$mail->ErrorInfo);
+      jfail('Mail error (resolve): '.$mail->ErrorInfo, 500);
+  }
 
   jok(['status'=>'resolved']);
 }
@@ -209,8 +237,6 @@ if ($action === 'ban_now') {
   // Gamitin natin yung admin note bilang ban reason
   $reasonText = $noteIn !== '' ? $noteIn : ('Policy violation related to report #'.$reportId);
 
-  // Values galing sa taas ng file:
-  // $banDays, $banHours, $permanent, $adminId
   $isPermanent = ($permanent === 1);
   $startAt     = now();
   $endAt       = null;
@@ -228,7 +254,7 @@ if ($action === 'ban_now') {
 
   $conn->begin_transaction();
   try {
-    // 1) Update USER table lang (walang user_ban table)
+    // 1) Update USER table
     if ($isPermanent) {
       $q2 = "UPDATE user
              SET account_status = 'banned',
@@ -269,7 +295,7 @@ if ($action === 'ban_now') {
     $st->execute();
     $st->close();
 
-    // 3) Mag-log din tayo sa notes ng report
+    // 3) Notes
     $extraNote = 'User banned: '.($isPermanent ? 'permanent' : ('until '.$endAt));
     if ($reasonText) {
       $extraNote .= ' | Reason: '.$reasonText;
@@ -282,7 +308,7 @@ if ($action === 'ban_now') {
     jfail('Ban failed: ' . $e->getMessage(), 500);
   }
 
-  // 4) Notifications + Email sa user
+  // 4) In-app notification
   add_notif(
     $conn,
     $targetId,
@@ -293,34 +319,34 @@ if ($action === 'ban_now') {
     $reportId
   );
 
-  try {
-    $mail = mailer();
-    $mail->addAddress($rep['target_email'], $rep['target_full_name']);
+  // 5) Email about the ban
+  $mail = mailer();
+  $mail->addAddress($rep['target_email'], $rep['target_full_name'] ?? '');
 
-    if ($isPermanent) {
-      $mail->Subject = "Account permanently banned — AquaSafe RuripPH";
-      $mail->Body = "
+  if ($isPermanent) {
+    $mail->Subject = "Account permanently banned — AquaSafe RuripPH";
+    $mail->Body = "
         Hi <b>".htmlspecialchars($rep['target_full_name'])."</b>,<br><br>
         After review of Report #{$rep['report_id']}, your account has been <b>permanently banned</b> due to policy violations.<br>
         <b>Reason:</b> ".htmlspecialchars($reasonText)."<br><br>
         You may reply to this email to appeal.<br><br>
         — AquaSafe RuripPH Moderation
-      ";
-    } else {
-      $untilFmt = date('M j, Y g:ia', strtotime($endAt));
-      $mail->Subject = "Temporary account ban — AquaSafe RuripPH";
-      $mail->Body = "
+    ";
+  } else {
+    $untilFmt = date('M j, Y g:ia', strtotime($endAt));
+    $mail->Subject = "Temporary account ban — AquaSafe RuripPH";
+    $mail->Body = "
         Hi <b>".htmlspecialchars($rep['target_full_name'])."</b>,<br><br>
         After review of Report #{$rep['report_id']}, your account has been <b>temporarily banned</b> until <b>{$untilFmt}</b>.<br>
         <b>Reason:</b> ".htmlspecialchars($reasonText)."<br><br>
         You may reply to this email to appeal.<br><br>
         — AquaSafe RuripPH Moderation
-      ";
-    }
+    ";
+  }
 
-    $mail->send();
-  } catch (Exception $e) {
-    // ignore mail errors
+  if (!$mail->send()) {
+      error_log('Report mail error (ban_now): '.$mail->ErrorInfo);
+      jfail('Mail error (ban_now): '.$mail->ErrorInfo, 500);
   }
 
   jok([

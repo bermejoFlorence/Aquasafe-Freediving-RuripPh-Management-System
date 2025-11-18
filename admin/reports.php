@@ -494,8 +494,9 @@ function trimtext($s,$len=60){ $s=trim((string)$s); return (mb_strlen($s)>$len)?
           $goto = 'view_post.php?post_id='.(int)$r['post_id'];
           if ($r['target_type']==='comment') { $goto .= '#c-'.$r['target_id']; }
 
-          $statusClass = str_replace(' ','_', strtolower($r['status']));
-          $statusLabel = ucwords(str_replace('_',' ', $r['status']));
+     $statusRaw   = $r['status'] ?: 'open';
+$statusClass = str_replace(' ','_', strtolower($statusRaw));
+$statusLabel = ucwords(str_replace('_',' ', $statusRaw));
         ?>
         <tr>
           <td><?= $rownum++; ?></td>
