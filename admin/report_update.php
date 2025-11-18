@@ -121,11 +121,10 @@ if ($action === 'notify_start') {
 
   // Update report
   $sql = "UPDATE forum_report
-          SET status='under_review',
-              notified_at = NOW(),
-              respond_deadline = ?,
-              hide_target = ?
-          WHERE report_id=?";
+        SET status='under_review',
+            respond_deadline = ?,
+            hide_target = ?
+        WHERE report_id=?";
   $st = $conn->prepare($sql);
   $st->bind_param("sii", $deadline, $hide, $reportId);
   $st->execute();

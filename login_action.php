@@ -69,7 +69,7 @@ if (($user['role'] ?? '') === 'client') {
                  ? (empty($until) || strtotime($until) > time())
                  : false;
 
-  if ($isStatusBanned && !$stillBanned && !empty($until) && strtotime($until) <= time()) {
+  if ( ($isStatusBanned || $iBanned) && !$stillBanned && !empty($until) && strtotime($until) <= time()) {
     // Ban expired → auto-unban now
     $uid = (int)$user['user_id'];
     $up = $conn->prepare("
