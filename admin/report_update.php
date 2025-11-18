@@ -202,66 +202,60 @@ if ($action === 'resolve') {
 }
 
 if ($action === 'ban_now') {
-  // Inputs coming from the ban modal
-  $mode        = $_POST['ban_mode']   ?? 'preset'; // preset|custom|perm
-  $hoursInput  = (int)($_POST['ban_hours'] ?? 168); // for preset (24, 72, 168, 720)
-  $customDays  = (int)($_POST['ban_custom_days'] ?? 0);
-  $permFlag    = (int)($_POST['ban_perm'] ?? 0);
-  $reasonText  = safe_note($_POST['ban_reason'] ?? $noteIn); // use textarea or admin note
-
-  $adminId     = (int)($_SESSION['user_id']);
-  $targetId    = (int)$rep['target_user_id'];
-
-  // Compute end time
-  $isPermanent = ($mode === 'perm') || ($permFlag === 1);
-  $startAt = date('Y-m-d H:i:s');
-  if ($isPermanent) {
-    $endAt = null;
-  } else {
-    $totalHours = ($mode === 'custom' && $customDays > 0)
-      ? ($customDays * 24)
-      : max(1, $hoursInput);
-    $endAt = date('Y-m-d H:i:s', time() + $totalHours * 3600);
+  $targetId = (int)$rep['target_user_id'];
+  if (!$targetId) {
+    jfail('Invalid target user for this report.');
   }
 
-  // Begin
+  // Gamitin natin yung admin note bilang ban reason
+  $reasonText = $noteIn !== '' ? $noteIn : ('Policy violation related to report #'.$reportId);
+
+  // Values galing sa taas ng file:
+  // $banDays, $banHours, $permanent, $adminId
+  $isPermanent = ($permanent === 1);
+  $startAt     = now();
+  $endAt       = null;
+
+  if (!$isPermanent) {
+    if ($banHours > 0) {
+      $seconds = $banHours * 3600;
+    } elseif ($banDays > 0) {
+      $seconds = $banDays * 86400;
+    } else {
+      jfail('Please specify ban duration (days or hours).');
+    }
+    $endAt = date('Y-m-d H:i:s', time() + $seconds);
+  }
+
   $conn->begin_transaction();
   try {
-    // 1) Log into user_ban
-    $q1 = "INSERT INTO user_ban (user_id, report_id, type, reason_text, start_at, end_at, created_by)
-           VALUES (?,?,?,?,?,?,?)";
-    $st = $conn->prepare($q1);
-    $type = $isPermanent ? 'perm' : 'temp';
-    $st->bind_param("iissssi", $targetId, $reportId, $type, $reasonText, $startAt, $endAt, $adminId);
-    $st->execute();
-    $st->close();
-
-    // 2) Update user status (NO banned_by column here)
+    // 1) Update USER table lang (walang user_ban table)
     if ($isPermanent) {
       $q2 = "UPDATE user
-             SET account_status='banned',
-                 is_banned=1,
-                 banned_until=NULL,
-                 banned_at=NOW(),
-                 banned_reason=?,
-                 ban_reason=?,
+             SET account_status = 'banned',
+                 is_banned      = 1,
+                 banned_until   = NULL,
+                 banned_reason  = ?,
+                 banned_by      = ?,
+                 banned_at      = NOW(),
                  session_version = COALESCE(session_version,0) + 1
-             WHERE user_id=? AND role='client'";
+             WHERE user_id = ? AND role = 'client'";
       $st = $conn->prepare($q2);
-      $st->bind_param("ssi", $reasonText, $reasonText, $targetId);
+      $st->bind_param("sii", $reasonText, $adminId, $targetId);
     } else {
       $q2 = "UPDATE user
-             SET account_status='banned',
-                 is_banned=1,
-                 banned_until=?,
-                 banned_at=NOW(),
-                 banned_reason=?,
-                 ban_reason=?,
+             SET account_status = 'banned',
+                 is_banned      = 1,
+                 banned_until   = ?,
+                 banned_reason  = ?,
+                 banned_by      = ?,
+                 banned_at      = NOW(),
                  session_version = COALESCE(session_version,0) + 1
-             WHERE user_id=? AND role='client'";
+             WHERE user_id = ? AND role = 'client'";
       $st = $conn->prepare($q2);
-      $st->bind_param("sssi", $endAt, $reasonText, $reasonText, $targetId);
+      $st->bind_param("ssii", $endAt, $reasonText, $adminId, $targetId);
     }
+
     $st->execute();
     if ($st->affected_rows < 1) {
       $st->close();
@@ -269,12 +263,19 @@ if ($action === 'ban_now') {
     }
     $st->close();
 
-    // 3) Close the report + hide target
-    $q3 = "UPDATE forum_report SET status='closed', hide_target=1 WHERE report_id=?";
+    // 2) I-update ang report: mark as closed + hide target
+    $q3 = "UPDATE forum_report SET status = 'closed', hide_target = 1 WHERE report_id = ?";
     $st = $conn->prepare($q3);
     $st->bind_param("i", $reportId);
     $st->execute();
     $st->close();
+
+    // 3) Mag-log din tayo sa notes ng report
+    $extraNote = 'User banned: '.($isPermanent ? 'permanent' : ('until '.$endAt));
+    if ($reasonText) {
+      $extraNote .= ' | Reason: '.$reasonText;
+    }
+    append_note($conn, $reportId, $extraNote);
 
     $conn->commit();
   } catch (Exception $e) {
@@ -282,8 +283,11 @@ if ($action === 'ban_now') {
     jfail('Ban failed: ' . $e->getMessage(), 500);
   }
 
-  // 4) Notifications + Email
-  add_notif($conn, $targetId, 'ban',
+  // 4) Notifications + Email sa user
+  add_notif(
+    $conn,
+    $targetId,
+    'ban',
     $isPermanent
       ? 'Your account has been permanently banned.'
       : ('Your account has been banned until ' . date('M j, Y g:ia', strtotime($endAt)) . '.'),
@@ -293,6 +297,7 @@ if ($action === 'ban_now') {
   try {
     $mail = mailer();
     $mail->addAddress($rep['target_email'], $rep['target_full_name']);
+
     if ($isPermanent) {
       $mail->Subject = "Account permanently banned — AquaSafe RuripPH";
       $mail->Body = "
@@ -313,14 +318,17 @@ if ($action === 'ban_now') {
         — AquaSafe RuripPH Moderation
       ";
     }
+
     $mail->send();
-  } catch (Exception $e) { /* ignore mail errors */ }
+  } catch (Exception $e) {
+    // ignore mail errors
+  }
 
   jok([
-    'status'  => 'closed',
-    'banned'  => true,
-    'perm'    => $isPermanent,
-    'until'   => $endAt
+    'status' => 'closed',
+    'banned' => true,
+    'perm'   => $isPermanent,
+    'until'  => $endAt
   ]);
 }
 
