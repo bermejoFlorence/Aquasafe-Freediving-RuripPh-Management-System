@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
 }
 
 $admin_id = (int)$_SESSION['user_id'];
-$limit    = 20;
+
 $only     = trim($_GET['only'] ?? '');   // e.g. 'report' for the Reports tab
 
 // ---- base SQL (we'll tack on the optional filter below) ----
@@ -77,10 +77,10 @@ if ($only === 'report') {
   $sql .= " AND n.type = 'report' ";
 }
 
-$sql .= " ORDER BY n.is_read ASC, n.created_at DESC LIMIT ? ";
+$sql .= " ORDER BY n.is_read ASC, n.created_at DESC ";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param('iii', $admin_id, $admin_id, $limit);
+$stmt->bind_param('ii', $admin_id, $admin_id);
 $stmt->execute();
 $res = $stmt->get_result();
 
