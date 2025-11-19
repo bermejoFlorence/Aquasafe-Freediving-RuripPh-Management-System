@@ -21,17 +21,24 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 
 include '../db_connect.php';
 
-// --- Fetch all admins ---
+// DEBUG habang nag-aayos (optional, pwede mong alisin kapag ok na)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Kunin lahat ng admin users
 $sqlAdmins = "
-    SELECT user_id, full_name, email_address, created_at
-    FROM user
-    WHERE role = 'admin'
-    ORDER BY created_at DESC
+  SELECT user_id, full_name, email_address, created_at
+FROM user
+WHERE role = 'admin'
+ORDER BY created_at DESC;
+
 ";
 $resultAdmins = $conn->query($sqlAdmins);
 if (!$resultAdmins) {
     die('Query error: ' . $conn->error);
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -189,37 +196,35 @@ if (!$resultAdmins) {
                             <th>Date Created</th>
                         </tr>
                     </thead>
-                    <tbody>
+                   <tbody>
                         <?php
                         $no = 1;
                         if ($resultAdmins->num_rows > 0):
                             while ($row = $resultAdmins->fetch_assoc()):
                         ?>
-                        <tr>
-                            <td class="col-no"><?php echo $no++; ?></td>
-                            <td><?php echo htmlspecialchars($row['full_name']); ?></td>
-                            <td><?php echo htmlspecialchars($row['email_address']); ?></td>
-                            <td>
-                                <?php
-                                // format date, adjust field name if needed
-                                $created = $row['created_at'] ?? '';
-                                echo $created
-                                    ? date('F j, Y', strtotime($created))
-                                    : '-';
-                                ?>
-                            </td>
-                        </tr>
+                            <tr>
+                                <td class="col-no"><?php echo $no++; ?></td>
+                                <td><?php echo htmlspecialchars($row['full_name']); ?></td>
+                                <td><?php echo htmlspecialchars($row['email_address']); ?></td>
+                              <td>
+  <?php echo $row['created_at']
+         ? date('F j, Y', strtotime($row['created_at']))
+         : '-'; ?>
+</td>
+
+                            </tr>
                         <?php
                             endwhile;
                         else:
                         ?>
-                        <tr>
-                            <td colspan="4" style="text-align:center; padding:16px; color:#8aa0aa;">
-                                No admin accounts found.
-                            </td>
-                        </tr>
+                            <tr>
+                                <td colspan="4" style="text-align:center;padding:16px;color:#8aa0aa;">
+                                    No admin accounts found.
+                                </td>
+                            </tr>
                         <?php endif; ?>
                     </tbody>
+
                 </table>
             </div>
 
