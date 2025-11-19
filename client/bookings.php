@@ -1176,24 +1176,90 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // submit deposit
+  // submit deposit WITH TERMS & CONDITIONS
   depositForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const formData = new FormData(depositForm);
-    Swal.fire({ title:'Sending Payment...', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
-    fetch('pay.php', { method:'POST', body: formData })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success){
-          Swal.fire({ icon:'success', title:'Payment Submitted', text:data.msg || 'We will verify your payment.', confirmButtonColor:'#1e8fa2' })
-            .then(() => window.location.reload());
-          closeModal(depositModal);
-          const row = document.getElementById('booking-row-' + formData.get('booking_id'));
-          if (row) row.querySelector('td[data-label="Payment Status"]').textContent = 'Pending';
-        } else {
-          Swal.fire({ icon:'error', title:'Failed', text:data.msg || 'Payment failed.', confirmButtonColor:'#1e8fa2' });
+
+    // 1) Show Terms & Conditions muna
+    Swal.fire({
+      title: 'Booking Terms & Policy',
+      icon: 'info',
+      html: `
+        <div style="text-align:left; max-height:230px; overflow-y:auto; font-size:.9rem; line-height:1.4;">
+          <p><b>Please read carefully before sending your payment:</b></p>
+          <ul style="padding-left:18px; margin:0;">
+            <li>Downpayment is <b>non-refundable</b> once the slot is confirmed.</li>
+            <li>Re-booking or changes in schedule must be requested at least <b>7 days</b> before the booking date.</li>
+            <li>Failure to settle the remaining balance on the agreed schedule may result in <b>cancellation of your slot</b>.</li>
+            <li>Bad weather or safety-related cancellations will follow the resort’s <b>re-booking policy</b>.</li>
+          </ul>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-size:.9rem;">
+          <input type="checkbox" id="termsAgree">
+          <span>I have read and agree to the booking terms & policy.</span>
+        </label>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'I Agree & Send Payment',
+      cancelButtonText: 'Review Details',
+      confirmButtonColor: '#1e8fa2',
+      cancelButtonColor: '#aaaaaa',
+      focusConfirm: false,
+      preConfirm: () => {
+        const cb = document.getElementById('termsAgree');
+        if (!cb || !cb.checked) {
+          Swal.showValidationMessage('Please tick "I agree" to continue.');
+          return false;
         }
-      })
-      .catch(() => Swal.fire({ icon:'error', title:'Server Error', text:'Try again later.', confirmButtonColor:'#1e8fa2' }));
+        return true;
+      }
+    }).then(result => {
+      if (!result.isConfirmed) return; // user cancelled or did not agree
+
+      // 2) Kung pumayag siya: saka lang mag-send ng payment
+      Swal.fire({
+        title: 'Sending Payment...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      fetch('pay.php', { method:'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success){
+            Swal.fire({
+              icon: 'success',
+              title: 'Payment Submitted',
+              text: data.msg || 'We will verify your payment.',
+              confirmButtonColor: '#1e8fa2'
+            }).then(() => window.location.reload());
+
+            closeModal(depositModal);
+
+            const row = document.getElementById('booking-row-' + formData.get('booking_id'));
+            if (row) {
+              const cell = row.querySelector('td[data-label="Payment Status"]');
+              if (cell) cell.textContent = 'Pending';
+            }
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: 'Failed',
+              text: data.msg || 'Payment failed.',
+              confirmButtonColor: '#1e8fa2'
+            });
+          }
+        })
+        .catch(() => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Server Error',
+            text: 'Try again later.',
+            confirmButtonColor: '#1e8fa2'
+          });
+        });
+    });
   });
 
   /* -------------------- cancel booking (SweetAlert2) -------------------- */
