@@ -798,7 +798,9 @@ body.modal-open { overflow: hidden; }
   .gcash-grid{ grid-template-columns: 1fr; }
   .qr-img{ max-width:72vw; }
 }
-
+.swal2-container {
+  z-index: 13000 !important;
+}
     </style>
 </head>
 <body>
