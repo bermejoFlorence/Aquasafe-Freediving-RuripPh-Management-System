@@ -45,7 +45,36 @@ if ((int)($_SESSION['session_version'] ?? 0) !== (int)($row['session_version'] ?
 ?>
 
 <?php
+// ==== BEST SELLER BASE SA BOOKING COUNT ====
 
+// 1) Alamin kung aling package ang may pinakamaraming booking
+$bestSellerId = null;
+
+// kung gusto mo lahat ng bookings:
+$bestSql = "
+    SELECT package_id, COUNT(*) AS cnt
+    FROM booking
+    GROUP BY package_id
+    ORDER BY cnt DESC
+    LIMIT 1
+";
+
+// kung gusto mo approved/confirmed lang, pwede mo itong version na ito:
+// $bestSql = "
+//     SELECT package_id, COUNT(*) AS cnt
+//     FROM booking
+//     WHERE status IN ('approved','completed')
+//     GROUP BY package_id
+//     ORDER BY cnt DESC
+//     LIMIT 1
+// ";
+
+$bestRes = $conn->query($bestSql);
+if ($bestRes && $bestRow = $bestRes->fetch_assoc()) {
+    $bestSellerId = (int)$bestRow['package_id'];
+}
+
+// 2) Kunin packages + features
 $packages = [];
 $sql = "SELECT 
             p.package_id, 
@@ -59,20 +88,26 @@ $sql = "SELECT
 
 $result = $conn->query($sql);
 
-// Group features by package
+// Group features by package + mark best seller
 foreach ($result as $row) {
-    $id = $row['package_id'];
+    $id = (int)$row['package_id'];
+
     if (!isset($packages[$id])) {
         $packages[$id] = [
-            'name' => $row['name'],
-            'price' => $row['price'],
+            'name'        => $row['name'],
+            'price'       => $row['price'],
             'description' => $row['description'],
-            'features' => []
+            'features'    => [],
+            'best'        => ($id === $bestSellerId)  // ✅ ito ang flag
         ];
     }
-    $packages[$id]['features'][] = $row['feature'];
+
+    if (!empty($row['feature'])) {
+        $packages[$id]['features'][] = $row['feature'];
+    }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -168,15 +203,20 @@ body{
   outline-color:#9ad9e7;
 }
 
-/* Optional: make the first card look “Best Seller” without HTML change */
-.package-container .card:nth-child(1)::after{
+.card.best-seller .best-pill{
   content:"Best Seller";
-  position:absolute; top:14px; right:-8px;
+  position:absolute;
+  top:14px;
+  right:-8px;
   background: linear-gradient(90deg,#ffb703,#ffd166);
-  color:#6b4100; font-weight:800; font-size:12.5px;
-  padding:6px 12px; border-radius:999px;
+  color:#6b4100;
+  font-weight:800;
+  font-size:12.5px;
+  padding:6px 12px;
+  border-radius:999px;
   box-shadow: 0 8px 20px #ffbd0f33;
 }
+
 
 /* Title & price pill */
 .card h2{
@@ -562,22 +602,29 @@ body{
 </div>
 
             <div class="package-container">
-            <?php foreach ($packages as $id => $pkg): ?>
-    <div class="card">
-        <h2><?= htmlspecialchars($pkg['name']) ?></h2>
-        <p>P <?= number_format($pkg['price'], 2) ?> / pax</p>
-        <?php foreach ($pkg['features'] as $feature): ?>
-            <p><?= htmlspecialchars($feature) ?></p>
-        <?php endforeach; ?>
-        <button class="book-btn"
-  onclick="showCalendar()"
-  data-package="<?= htmlspecialchars($pkg['name']) ?>"
-  data-price="<?= number_format($pkg['price'], 2, '.', '') ?>"
-  data-package-id="<?= $id ?>">
-  Book Now
-</button>
-    </div>
+           <?php foreach ($packages as $id => $pkg): ?>
+  <div class="card <?= $pkg['best'] ? 'best-seller' : '' ?>">
+      <?php if ($pkg['best']): ?>
+        <span class="best-pill">Best Seller</span>
+      <?php endif; ?>
+
+      <h2><?= htmlspecialchars($pkg['name']) ?></h2>
+      <p class="price">P <?= number_format($pkg['price'], 2) ?> / pax</p>
+
+      <?php foreach ($pkg['features'] as $feature): ?>
+        <p><?= htmlspecialchars($feature) ?></p>
+      <?php endforeach; ?>
+
+      <button class="book-btn"
+              onclick="showCalendar()"
+              data-package="<?= htmlspecialchars($pkg['name']) ?>"
+              data-price="<?= number_format($pkg['price'], 2, '.', '') ?>"
+              data-package-id="<?= $id ?>">
+        Book Now
+      </button>
+  </div>
 <?php endforeach; ?>
+
             </div>
         </div>
 
