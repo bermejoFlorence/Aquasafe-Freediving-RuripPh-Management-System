@@ -287,105 +287,136 @@ Swal.fire({
         });
     }
 
-    // ==== NOTIFICATION BELL Dropdown ====
-const notifBtn = document.getElementById('notif-btn');
-const notifBadge = document.getElementById('notif-badge');
-const notifDropdown = document.getElementById('notif-dropdown');
-const notifList = document.getElementById('notif-list');
+       // ==== NOTIFICATION BELL Dropdown ====
+    const notifBtn      = document.getElementById('notif-btn');
+    const notifBadge    = document.getElementById('notif-badge');
+    const notifDropdown = document.getElementById('notif-dropdown');
+    const notifList     = document.getElementById('notif-list');
 
-// Helper: Format "time ago" for notification time
-function timeAgo(dateString) {
-    const now = new Date();
-    const date = new Date(dateString);
-    const seconds = Math.floor((now - date) / 1000);
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return Math.floor(seconds/60) + ' minute(s) ago';
-    if (seconds < 86400) return Math.floor(seconds/3600) + ' hour(s) ago';
-    return date.toLocaleDateString();
-}
+    // helper para safe maglagay ng text / attr
+    function esc(s){
+        return (s ?? '').toString().replace(/[&<>"']/g, m => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[m]));
+    }
 
-function loadNotifications() {
-    fetch('admin_get_notifications.php')
-        .then(response => response.json())
-        .then(data => {
-            const unreadCount = data.filter(n => n.is_read == 0).length;
-            // Show badge count for unread only
-            notifBadge.style.display = unreadCount > 0 ? 'inline-flex' : 'none';
-            notifBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+    // Helper: Format "time ago"
+    function timeAgo(dateString) {
+        const now = new Date();
+        const date = new Date(dateString);
+        const seconds = Math.floor((now - date) / 1000);
+        if (isNaN(seconds)) return '';
+        if (seconds < 60)   return 'Just now';
+        if (seconds < 3600) return Math.floor(seconds/60) + ' minute(s) ago';
+        if (seconds < 86400)return Math.floor(seconds/3600) + ' hour(s) ago';
+        return date.toLocaleDateString();
+    }
 
-            notifList.innerHTML = data.length === 0
-                ? '<div class="notif-item">No new notifications.</div>'
-                : data.map(notif => {
+    function loadNotifications() {
+        if (!notifList || !notifBadge) return;
+
+        fetch('admin_get_notifications.php')
+            .then(response => response.json())
+            .then(data => {
+                // 👉 DEBUG kung gusto mo: console.log(data);
+                const unreadCount = data.filter(n => n.is_read == 0).length;
+
+                // Badge
+                if (unreadCount > 0) {
+                    notifBadge.style.display = 'inline-flex';
+                    notifBadge.textContent   = unreadCount > 99 ? '99+' : unreadCount;
+                } else {
+                    notifBadge.style.display = 'none';
+                    notifBadge.textContent   = '';
+                }
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    notifList.innerHTML = '<div class="notif-item">No new notifications.</div>';
+                    return;
+                }
+
+                notifList.innerHTML = data.map(notif => {
                     let message = '';
-                    // Custom display for booking/payment
                     if (notif.type === 'booking') {
-                        message = `Booking received from <b>${esc(notif.user_name || 'Client')}</b> for ${esc(notif.package_name || "a package")} on <b>${notif.booking_date ? new Date(notif.booking_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</b>.`;
-                        } else if (notif.type === 'payment') {
+                        message = `Booking received from <b>${esc(notif.user_name || 'Client')}</b> for ${esc(notif.package_name || "a package")}${notif.booking_date ? ` on <b>${new Date(notif.booking_date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}</b>` : ''}.`;
+                    } else if (notif.type === 'payment') {
                         message = `Downpayment received${notif.booking_date ? ` for <b>${new Date(notif.booking_date).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}</b>` : ''}.`;
-                        } else if (notif.type === 'forum') {
-                        // NEW: gamitin ang forum title kung meron
+                    } else if (notif.type === 'forum') {
                         const t = notif.forum_title ? esc(notif.forum_title) : 'View forum post';
                         message = `New forum post: <b>${t}</b>`;
-                        } else {
+                    } else {
                         message = esc(notif.message || 'Notification');
-                        }
-                    // helper para safe maglagay ng text/attr
-                    function esc(s){ return (s ?? '').toString().replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+                    }
 
                     return `
-                    <div class="notif-item ${notif.is_read == 0 ? 'notif-unread' : ''}"
-                        data-id="${esc(notif.notification_id)}"
-                        data-link="${esc(notif.link || 'bookings.php')}"
-                        style="cursor:pointer;">
-                        <div class="notif-main">${message}</div>
-                        <div class="notif-time">${timeAgo(notif.created_at)}</div>
-                    </div>
+                        <div class="notif-item ${notif.is_read == 0 ? 'notif-unread' : ''}"
+                            data-id="${esc(notif.notification_id)}"
+                            data-link="${esc(notif.link || 'bookings.php')}"
+                            style="cursor:pointer;">
+                            <div class="notif-main">${message}</div>
+                            <div class="notif-time">${timeAgo(notif.created_at)}</div>
+                        </div>
                     `;
                 }).join('');
-        })
-        .catch(() => {
-            notifList.innerHTML = '<div class="notif-item">Unable to load notifications.</div>';
-        });
-}
+            })
+            .catch(err => {
+                console.error('Notif load failed:', err);
+                notifList.innerHTML = '<div class="notif-item">Unable to load notifications.</div>';
+            });
+    }
 
-// Handle notif click
-notifList.addEventListener('click', function(e) {
-    const target = e.target.closest('.notif-item');
-    if (target && target.dataset.id) {
-        // Optional: show loading indicator here
-        fetch('mark_notification_read.php', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'notification_id=' + encodeURIComponent(target.dataset.id)
-        })
-        .then(res => res.json())
-        .then(() => {
-            // 1. Update UI immediately
-            loadNotifications();
-            // 2. Short delay to see visual feedback (e.g., 200ms), then redirect
-            setTimeout(function() {
-                window.location = target.dataset.link || 'bookings.php';
-            }, 200);
+    // Click on notif item → mark as read + redirect
+    if (notifList) {
+        notifList.addEventListener('click', function(e) {
+            const target = e.target.closest('.notif-item');
+            if (!target || !target.dataset.id) return;
+
+            const notifId = target.dataset.id;
+
+            fetch('mark_notification_read.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'notification_id=' + encodeURIComponent(notifId)
+            })
+            .then(res => res.json())
+            .then(() => {
+                // refresh badge + list
+                loadNotifications();
+                // small delay para makita muna na nawala yung highlight/badge
+                setTimeout(function() {
+                    window.location = target.dataset.link || 'bookings.php';
+                }, 200);
+            })
+            .catch(err => {
+                console.error('mark_notification_read error:', err);
+                // kahit nag-error, tuloy pa rin ang redirect
+                setTimeout(function() {
+                    window.location = target.dataset.link || 'bookings.php';
+                }, 200);
+            });
         });
     }
-});
 
+    // Open/close dropdown
+    if (notifBtn && notifDropdown) {
+        notifBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            notifDropdown.classList.toggle('show');
+            loadNotifications(); // refresh on open
+        });
 
+        document.addEventListener('click', function() {
+            notifDropdown.classList.remove('show');
+        });
 
-// Open/close notification dropdown
-notifBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    notifDropdown.classList.toggle('show');
-    loadNotifications(); // always refresh on open!
-});
-document.addEventListener('click', function() {
-    notifDropdown.classList.remove('show');
-});
-notifDropdown.addEventListener('click', function(e) {
-    e.stopPropagation();
-});
-setInterval(loadNotifications, 5000);
-loadNotifications();
+        notifDropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    // Auto-refresh every 5s
+    setInterval(loadNotifications, 5000);
+    loadNotifications();
 
 });
 
