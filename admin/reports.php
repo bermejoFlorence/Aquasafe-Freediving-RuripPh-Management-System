@@ -782,17 +782,33 @@ document.addEventListener('click', async (e) => {
     }
   });
 
-  async function doPost(fd){
-    const res  = await fetch('report_update.php', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: fd.toString()
-    });
-    const data = await res.json().catch(()=>({}));
-    if (!res.ok || !data.ok) {
-      throw new Error(data.message || ('HTTP '+res.status));
-    }
+async function doPost(fd){
+  const res = await fetch('report_update.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: fd.toString()
+  });
+
+  const text = await res.text();   // basahin muna raw text
+  let data = {};
+
+  try {
+    data = JSON.parse(text);       // try i-parse bilang JSON
+  } catch (e) {
+    // parse failed – so wala tayong data.ok
   }
+
+  if (!res.ok || !data.ok) {
+    // Kung may JSON message, gamitin; else isama raw response text
+    const msg = (data && data.message)
+      ? data.message
+      : ('HTTP ' + res.status + (text ? ' • ' + text : ''));
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
 
   async function confirmBox(title, text){
     const r = await Swal.fire({

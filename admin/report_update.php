@@ -1,8 +1,8 @@
 <?php
 // admin/report_update.php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+ini_set('display_errors', 0);           // ❗ important, para hindi humalo sa JSON
+ini_set('display_startup_errors', 0);
+error_reporting(E_ALL);                // log pa rin ang errors sa error_log
 
 session_start();
 if (!isset($_SESSION['user_id']) || (($_SESSION['role'] ?? '') !== 'admin')) {
@@ -101,14 +101,14 @@ function mailer(): PHPMailer {
     $mail->isSMTP();
 
     // 🔹 Hostinger SMTP – PALITAN nang tama
-    $mail->Host       = 'smtp.hostinger.com';
+    $mail->Host       = 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = 'no-reply@YOURDOMAIN.com';   // TODO: palitan sa tunay na email
-    $mail->Password   = 'YOUR_EMAIL_PASSWORD';       // TODO: palitan sa tunay na password
+    $mail->Username   = 'markson.carino@cbsua.edu.ph';   // TODO: palitan sa tunay na email
+    $mail->Password   = 'wzzc jkhk bejh xqoe';       // TODO: palitan sa tunay na password
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port       = 587;
 
-    $mail->setFrom('no-reply@YOURDOMAIN.com', 'AquaSafe RuripPH'); // TODO: match sa Username
+    $mail->setFrom('markson.carino@cbsua.edu.ph', 'AquaSafe RuripPH'); // TODO: match sa Username
     $mail->isHTML(true);
     $mail->CharSet = 'UTF-8';
 
