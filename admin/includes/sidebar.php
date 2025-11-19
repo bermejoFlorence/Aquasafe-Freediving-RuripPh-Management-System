@@ -37,7 +37,6 @@
         <a href="admins.php" class="<?php echo ($page == 'admins') ? 'active' : ''; ?>">
     <i class="fa-solid fa-user-shield"></i> Admins
 </a>
-
     </div>
 </nav>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
