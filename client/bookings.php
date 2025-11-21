@@ -953,8 +953,13 @@ body.modal-open { overflow: hidden; }
 
       <div class="modal-group">
         <label>Downpayment Amount (₱)</label>
-        <input type="number" min="1" name="amount" id="deposit-amount" required placeholder="Enter amount"
-               style="width: 100%;">
+        <input type="number"
+       min="1000"
+       name="amount"
+       id="deposit-amount"
+       required
+       placeholder="Enter amount"
+       style="width: 100%;">
       </div>
 
       <div class="modal-group">
@@ -1178,15 +1183,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // submit deposit
-  // submit deposit WITH TERMS & CONDITIONS
-  depositForm?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(depositForm);
+depositForm?.addEventListener('submit', (e) => {
+  e.preventDefault();
 
-    // 1) Show Terms & Conditions muna
+  // 🔹 Validate minimum amount = 1000
+  const amountInput = document.getElementById('deposit-amount');
+  const amountVal   = parseFloat(amountInput.value || '0');
+
+  if (isNaN(amountVal) || amountVal < 1000) {
     Swal.fire({
-      title: 'Booking Terms & Policy',
-      icon: 'info',
+      icon: 'warning',
+      title: 'Invalid Amount',
+      text: 'Minimum downpayment is ₱1,000. Please enter at least ₱1,000.',
+      confirmButtonColor: '#1e8fa2'
+    });
+    amountInput.focus();
+    return; // ❌ huwag ituloy kung mababa sa 1000
+  }
+
+  const formData = new FormData(depositForm);
+
+  // 1) Show Terms & Conditions muna
+  Swal.fire({
+    title: 'Booking Terms & Policy',
+    icon: 'info',
       html: `
         <div style="text-align:left; max-height:230px; overflow-y:auto; font-size:.9rem; line-height:1.4;">
           <p><b>Please read carefully before sending your payment:</b></p>

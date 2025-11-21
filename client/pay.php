@@ -12,6 +12,15 @@ $booking_id = isset($_POST['booking_id']) ? (int)$_POST['booking_id'] : 0;
 $amount     = isset($_POST['amount']) ? (float)$_POST['amount'] : 0.0;
 $user_id    = (int)$_SESSION['user_id'];
 
+$MIN_DOWNPAYMENT = 1000;
+if ($amount < $MIN_DOWNPAYMENT) {
+    echo json_encode([
+        'success' => false,
+        'msg'     => 'Minimum downpayment is ₱1,000. Please enter at least ₱1,000.'
+    ]);
+    exit;
+}
+
 if (!$booking_id || !$amount || !isset($_FILES['proof'])) {
     echo json_encode(['success'=>false,'msg'=>'Missing fields.']); exit;
 }
