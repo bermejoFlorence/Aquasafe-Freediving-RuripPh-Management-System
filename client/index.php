@@ -244,6 +244,22 @@ body{
   font: normal 900 15px/1 "Font Awesome 6 Free";
   color:#1aa6bd; margin-top:2px;
 }
+/* Image wrapper sa taas ng card */
+.card-img{
+  width: 100%;
+  aspect-ratio: 4 / 3;        /* pwede mong gawing 16/9 kung gusto mo mas wide */
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: #e3f6fb;        /* light fallback bg kung mabagal mag-load */
+}
+
+.card-img img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 /* CTA button */
 .book-btn{
@@ -602,10 +618,28 @@ body{
 </div>
 
             <div class="package-container">
-           <?php foreach ($packages as $id => $pkg): ?>
+          <?php foreach ($packages as $id => $pkg): ?>
+
+  <?php
+    // Piliin ang tamang image filename base sa package_id
+    $imageFile = null;
+    if ($id === 1) {
+        $imageFile = 'package_1.jfif';
+    } elseif ($id === 2) {
+        $imageFile = 'package_2.jfif';
+    }
+  ?>
+
   <div class="card <?= $pkg['best'] ? 'best-seller' : '' ?>">
       <?php if ($pkg['best']): ?>
         <span class="best-pill">Best Seller</span>
+      <?php endif; ?>
+
+      <?php if ($imageFile): ?>
+        <div class="card-img">
+          <img src="<?= htmlspecialchars($imageFile) ?>"
+               alt="<?= htmlspecialchars($pkg['name']) ?>">
+        </div>
       <?php endif; ?>
 
       <h2><?= htmlspecialchars($pkg['name']) ?></h2>
@@ -616,14 +650,15 @@ body{
       <?php endforeach; ?>
 
       <button class="book-btn"
-              onclick="showCalendar()"
               data-package="<?= htmlspecialchars($pkg['name']) ?>"
               data-price="<?= number_format($pkg['price'], 2, '.', '') ?>"
               data-package-id="<?= $id ?>">
         Book Now
       </button>
   </div>
+
 <?php endforeach; ?>
+
 
             </div>
         </div>
