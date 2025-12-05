@@ -671,6 +671,12 @@ include '../db_connect.php';
 .content-area {
   padding: 5px;
 }
+.table .missing-col{
+  width:90px;
+  text-align:center;
+  font-variant-numeric: tabular-nums;
+}
+
 </style>
 
 </head>
