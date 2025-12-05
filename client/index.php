@@ -621,13 +621,9 @@ body{
           <?php foreach ($packages as $id => $pkg): ?>
 
   <?php
-    // Piliin ang tamang image filename base sa package_id
-    $imageFile = null;
-    if ($id === 1) {
-        $imageFile = 'package_1.jfif';
-    } elseif ($id === 2) {
-        $imageFile = 'package_2.jfif';
-    }
+    // Auto filename base sa package_id
+    // Same folder as itong PHP file (index.php)
+    $imageFile = "package_{$id}.jfif";
   ?>
 
   <div class="card <?= $pkg['best'] ? 'best-seller' : '' ?>">
@@ -635,12 +631,11 @@ body{
         <span class="best-pill">Best Seller</span>
       <?php endif; ?>
 
-      <?php if ($imageFile): ?>
-        <div class="card-img">
-          <img src="<?= htmlspecialchars($imageFile) ?>"
-               alt="<?= htmlspecialchars($pkg['name']) ?>">
-        </div>
-      <?php endif; ?>
+      <!-- Image sa taas ng card -->
+      <div class="card-img">
+        <img src="<?= htmlspecialchars($imageFile) ?>"
+             alt="<?= htmlspecialchars($pkg['name']) ?>">
+      </div>
 
       <h2><?= htmlspecialchars($pkg['name']) ?></h2>
       <p class="price">P <?= number_format($pkg['price'], 2) ?> / pax</p>
