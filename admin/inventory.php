@@ -676,6 +676,23 @@ include '../db_connect.php';
   text-align:center;
   font-variant-numeric: tabular-nums;
 }
+/* ==== Bigger thumbnails for Inventory table ==== */
+.table.inventory .pic-col{
+  width:110px; /* mas maluwag na space sa column */
+}
+
+.table.inventory .thumb{
+  width:80px;
+  height:80px;
+}
+
+/* medyo liitan ulit sa very small screens */
+@media (max-width:720px){
+  .table.inventory .thumb{
+    width:64px;
+    height:64px;
+  }
+}
 
 </style>
 
