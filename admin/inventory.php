@@ -585,7 +585,10 @@ include '../db_connect.php';
 .table .num-col{ width: 56px; text-align: right; color: var(--ink-2); }
 .table .pic-col{ width: 72px; }
 .table .qty-col,
-.table .inuse-col{ width: 90px; text-align: center; font-variant-numeric: tabular-nums; }
+.table .inuse-col{ width: 90px; text-align: center; font-variant-numeric: tabular-nums; 
+  width: 90px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;}
 @media (max-width: 720px){
   .table th{ padding: 10px 10px; }
   .table td{ padding: 10px 10px; }
@@ -698,14 +701,19 @@ include '../db_connect.php';
       <div class="table-scroll">
         <table class="table compact" id="approvedTable">
           <thead>
-            <tr>
-              <th>Client</th>
-              <th style="width:220px;">Booking</th>
-              <th style="width:240px;">Package</th>
-              <th style="width:110px;">Issued?</th>
-              <th style="width:150px;">Action</th>
-            </tr>
-          </thead>
+  <tr>
+    <th>No.</th>
+    <th>Item<br>Picture</th>
+    <th>Name</th>
+    <th>Available</th>
+    <th>Cleaning</th>
+    <th>Damaged</th>
+    <th>In use</th>
+    <th>Missing</th>   <!-- 🆕 -->
+    <th>Action</th>
+  </tr>
+</thead>
+
       <tbody>
 <?php
 $sql = "SELECT 
@@ -911,6 +919,7 @@ SELECT
   ii.price_per_day,
   ii.cleaning_qty,
   ii.damaged_qty,
+
   -- outstanding sa active kits (issued/partial/overdue)
   COALESCE(SUM(
     CASE 
@@ -918,7 +927,17 @@ SELECT
       THEN GREATEST(rki.qty - COALESCE(rki.returned_qty,0), 0)
       ELSE 0
     END
-  ), 0) AS in_use_out
+  ), 0) AS in_use_out,
+
+  -- 🆕 total missing for this item (kahit returned na yung kit)
+  COALESCE(SUM(
+    CASE 
+      WHEN rki.condition = 'missing' 
+      THEN GREATEST(rki.qty - COALESCE(rki.returned_qty,0), 0)
+      ELSE 0
+    END
+  ), 0) AS missing_qty
+
 FROM inventory_item ii
 LEFT JOIN rental_kit_item rki
   ON rki.item_id = ii.item_id
@@ -932,12 +951,16 @@ ORDER BY ii.name";
               if ($res = $conn->query($sql)) {
                 while ($it = $res->fetch_assoc()) {
                   $rowsRendered++;
-                 $name  = htmlspecialchars($it['name']);
-$qty   = (int)$it['total_qty'];
-$inUse = (int)$it['in_use_out'];           // galing sa bagong SQL alias
-$clean = (int)$it['cleaning_qty'];
-$damg  = (int)$it['damaged_qty'];
-$avail = max(0, $qty - $inUse - $clean - $damg);
+$name    = htmlspecialchars($it['name']);
+$qty     = (int)$it['total_qty'];
+$inUse   = (int)$it['in_use_out'];          // active rentals
+$clean   = (int)$it['cleaning_qty'];
+$damg    = (int)$it['damaged_qty'];
+$missing = (int)$it['missing_qty'];         // 🆕 galing sa SQL
+
+// bawas na rin ang missing sa available
+$avail = max(0, $qty - $inUse - $clean - $damg - $missing);
+
 
 $img   = $it['image_path'] ? '../'.htmlspecialchars($it['image_path']) : '../assets/no-image.png';
 $dataImg = $it['image_path'] ? htmlspecialchars($it['image_path']) : '';
@@ -955,6 +978,7 @@ echo '  <td class="qty-col"><b>'.$avail.'</b></td>';   // Available
 echo '  <td class="qty-col"><b>'.$clean.'</b></td>';   // Cleaning
 echo '  <td class="qty-col"><b>'.$damg.'</b></td>';    // Damaged
 echo '  <td class="inuse-col"><b>'.$inUse.'</b></td>'; // In use
+echo '  <td class="missing-col"><b>'.$missing.'</b></td>'; // 🆕 Missing
 $canFix   = ($damg > 0);
 $canClean = ($clean > 0);
 
