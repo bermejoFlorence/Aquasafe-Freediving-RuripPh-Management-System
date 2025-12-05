@@ -887,19 +887,21 @@ $lines[] = "{$name} × {$qty}{$addon}".( $tags ? ' '.implode(' ', $tags) : '' );
     <section id="tab-inventory" class="tab-panel">
       <div class="table-note">Simple stock view — quantities only. “In use” is read-only (based on active dives).</div>
       <div class="table-scroll">
-<table class="table inventory" id="inventoryTable">
-  <thead>
-    <tr>
-      <th>No.</th>
-      <th>Item<br>Picture</th>
-      <th>Name</th>
-      <th>Available</th>
-      <th>Cleaning</th>
-      <th>Damaged</th>
-      <th>In use</th>
-      <th>Action</th>
-    </tr>
-  </thead>
+        <table class="table inventory" id="inventoryTable">
+         <thead>
+  <tr>
+    <th>No.</th>
+    <th>Item<br>Picture</th>
+    <th>Name</th>
+    <th>Available</th>
+    <th>Cleaning</th>
+    <th>Damaged</th>
+    <th>In use</th>
+    <th>Missing</th>
+    <th>Action</th>
+  </tr>
+</thead>
+
           <tbody>
           <?php
             // Render live data from inventory_item (if table exists & has rows)
