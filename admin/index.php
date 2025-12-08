@@ -463,7 +463,7 @@ if ($stmt = $conn->prepare("SELECT COUNT(*) FROM booking WHERE status='pending'"
   let salesChart = null;
 
   function pickChartType(g){
-    return (g === 'daily' || g === 'weekly') ? 'line' : 'bar';
+     return 'line'; // lahat line graph na
   }
   function titleFor(g){
     if (g === 'daily') return 'Sales — Last 30 Days';
