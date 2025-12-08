@@ -958,7 +958,7 @@ body.modal-open { overflow: hidden; }
        name="amount"
        id="deposit-amount"
        required
-       placeholder="Mininum amount deposit 500.00"
+       placeholder="Mininum amount deposit 1,000.00"
        style="width: 100%;">
       </div>
 
