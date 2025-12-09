@@ -583,7 +583,7 @@ body{
     <div class="hc-track">
       <!-- Slide 1 -->
       <div class="hc-slide">
-        <img src="../uploads/hero/reef-1.jpeg" alt="Open water session over coral reef">
+        <img src="../uploads/hero/reef-1.jpg" alt="Open water session over coral reef">
         <div class="hc-overlay">
           <h2>Discover Breathtaking Reefs</h2>
           <p>Beginner-friendly, guided by certified coaches.</p>
