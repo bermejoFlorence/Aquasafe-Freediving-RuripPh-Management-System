@@ -442,7 +442,7 @@ function trimtext($s,$len=60){ $s=trim((string)$s); return (mb_strlen($s)>$len)?
   <!-- <div class="table-controls">
     <select name="status" class="table-filter" aria-label="Status">
       <?php
-        $opts = ['inbox'=>'Inbox (Open + Under review)','open'=>'Open','under_review'=>'Under review','resolved'=>'Resolved','closed'=>'Closed','all'=>'All'];
+        $opts = ['inbox'=>'Inbox (Open + Under review)','open'=>'Pending','under_review'=>'Under review','resolved'=>'Resolved','closed'=>'Banned','all'=>'All'];
         foreach($opts as $val=>$label){
           $sel = ($statusFilter===$val)?'selected':'';
           echo "<option value='".esc($val)."' $sel>".esc($label)."</option>";
