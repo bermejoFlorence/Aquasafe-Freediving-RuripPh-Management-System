@@ -23,11 +23,12 @@ require_once '../db_connect.php';
 
 // kunin lahat ng admin accounts
 $sqlAdmins = "
-    SELECT user_id, full_name, email_address
+    SELECT user_id, full_name, email_address, created_at
     FROM user
     WHERE role = 'admin'
     ORDER BY user_id DESC
 ";
+
 $resultAdmins = $conn->query($sqlAdmins);
 if (!$resultAdmins) {
     die('Query error: ' . $conn->error);
@@ -287,9 +288,17 @@ if (!$resultAdmins) {
                 ?>
                     <tr>
                         <td class="col-no"><?php echo $no++; ?></td>
-                        <td><?php echo htmlspecialchars($row['full_name']); ?></td>
-                        <td><?php echo htmlspecialchars($row['email_address']); ?></td>
-                        <td>-</td> <!-- wala pang created_at column -->
+<td><?php echo htmlspecialchars($row['full_name']); ?></td>
+<td><?php echo htmlspecialchars($row['email_address']); ?></td>
+<td>
+    <?php
+      if (!empty($row['created_at'])) {
+          echo htmlspecialchars(date('M d, Y g:ia', strtotime($row['created_at'])));
+      } else {
+          echo '-';
+      }
+    ?>
+</td>
                     </tr>
                 <?php
                     endwhile;
