@@ -248,6 +248,10 @@ if (!$resultAdmins) {
     #add-admin-save:hover{
         background:#156c79;
     }
+    .swal2-container {
+    z-index: 20001 !important;
+}
+
     </style>
 </head>
 <body>
@@ -402,11 +406,12 @@ document.addEventListener('DOMContentLoaded', function () {
         reader.readAsDataURL(file);
     });
 
-    // submit form
+        // submit form
     form?.addEventListener('submit', function (e) {
         e.preventDefault();
         const formData = new FormData(form);
 
+        // loading dialog
         Swal.fire({
             title: 'Saving admin...',
             allowOutsideClick: false,
@@ -419,18 +424,28 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .then(r => r.json())
         .then(data => {
+            // isara muna yung loading Swal
+            Swal.close();
+
             if (data.success) {
+                // ✅ isara muna yung Add Admin modal
                 closeModal();
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Admin Created',
-                    html: 'New administrator has been created.<br><br>' +
-                          '<b>Temporary password:</b> ' +
-                          (data.temp_password || '(check email)'),
-                    confirmButtonColor: '#1e8fa2'
-                }).then(() => {
-                    window.location.reload();
-                });
+
+                // maliit na delay para sure na sarado na ang modal
+                setTimeout(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Admin Created',
+                        html:
+                            (data.msg || 'New administrator has been created.') +
+                            '<br><br><b>Temporary password:</b> ' +
+                            (data.temp_password || '(check email)'),
+                        confirmButtonColor: '#1e8fa2'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                }, 150);
+
             } else {
                 Swal.fire({
                     icon: 'error',
@@ -440,7 +455,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
         })
-        .catch(() => {
+        .catch((err) => {
+            console.error(err);
+            Swal.close();
             Swal.fire({
                 icon: 'error',
                 title: 'Server Error',
@@ -449,6 +466,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
+
 });
 </script>
 </body>
