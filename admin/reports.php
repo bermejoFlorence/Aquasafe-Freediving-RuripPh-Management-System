@@ -487,17 +487,27 @@ function trimtext($s,$len=60){ $s=trim((string)$s); return (mb_strlen($s)>$len)?
         <tr><td colspan="8" style="text-align:center;color:#aaa;">No reports found.</td></tr>
       <?php else: $rownum = ($pageNum-1)*$perPage + 1; foreach($rows as $r): ?>
         <?php
-          $targetLabel = ($r['target_type']==='comment') ? ('Comment • #'.$r['target_id']) : 'Post';
-          $targetText  = ($r['target_type']==='comment')
-                          ? trimtext($r['comment_body'] ?? '', 60)
-                          : trimtext($r['post_title'] ?? '(untitled)', 60);
-          $goto = 'view_post.php?post_id='.(int)$r['post_id'];
-          if ($r['target_type']==='comment') { $goto .= '#c-'.$r['target_id']; }
+  $targetLabel = ($r['target_type']==='comment') ? ('Comment • #'.$r['target_id']) : 'Post';
+  $targetText  = ($r['target_type']==='comment')
+                  ? trimtext($r['comment_body'] ?? '', 60)
+                  : trimtext($r['post_title'] ?? '(untitled)', 60);
+  $goto = 'view_post.php?post_id='.(int)$r['post_id'];
+  if ($r['target_type']==='comment') { $goto .= '#c-'.$r['target_id']; }
 
-     $statusRaw   = $r['status'] ?: 'open';
-$statusClass = str_replace(' ','_', strtolower($statusRaw));
-$statusLabel = ucwords(str_replace('_',' ', $statusRaw));
-        ?>
+  // ---- STATUS MAPPING HERE ----
+  $statusRaw   = $r['status'] ?: 'open';
+  $statusClass = str_replace(' ','_', strtolower($statusRaw));
+
+  // DB → label
+  $statusLabelMap = [
+      'open'         => 'Pending',       // 🔁 open  → Pending
+      'under_review' => 'Under Review',
+      'resolved'     => 'Resolved',
+      'closed'       => 'Banned',        // 🔁 closed → Banned
+  ];
+  $statusLabel = $statusLabelMap[$statusRaw] ?? ucwords(str_replace('_',' ', $statusRaw));
+?>
+
         <tr>
           <td><?= $rownum++; ?></td>
           <td><?= esc(date('F j, Y g:ia', strtotime($r['created_at']))) ?></td>
