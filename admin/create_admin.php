@@ -3,6 +3,7 @@
 session_start();
 header('Content-Type: application/json');
 
+// Only admins
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     http_response_code(401);
     echo json_encode(['success' => false, 'msg' => 'Unauthorized']);
@@ -11,14 +12,19 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
 
 require_once __DIR__ . '/../db_connect.php';
 
+// Mas malinaw na DB error (habang dev)
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 // ========== PHPMailer ==========
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// NOTE: palitan ang folder name depende sa actual mo: 'phpmailer' vs 'PHPMailer'
-require_once __DIR__ . '/../phpmailer/src/Exception.php';
-require_once __DIR__ . '/../phpmailer/src/PHPMailer.php';
-require_once __DIR__ . '/../phpmailer/src/SMTP.php';
+// *** IMPORTANT ***
+// Gamitin ang KAPAREHONG path na gamit mo sa registration file:
+// root: PHPMailer/...
+require_once __DIR__ . '/../PHPMailer/src/Exception.php';
+require_once __DIR__ . '/../PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/../PHPMailer/src/SMTP.php';
 
 // ---------- helpers ----------
 function clean($s) {
@@ -111,6 +117,7 @@ $isVerified    = 0;
 $token         = bin2hex(random_bytes(32)); // 64-char token
 
 // ---------- insert new admin ----------
+// NOTE: sinama na natin: role, account_status, is_verified, verification_token, is_banned, created_at
 $stmt = $conn->prepare("
     INSERT INTO user (
         full_name,
@@ -120,10 +127,12 @@ $stmt = $conn->prepare("
         password,
         profile_pic,
         role,
+        account_status,
         is_verified,
-        verification_token
-    )
-    VALUES (?, ?, ?, ?, ?, ?, 'admin', ?, ?)
+        verification_token,
+        is_banned,
+        created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'admin', 'active', ?, ?, 0, NOW())
 ");
 
 $stmt->bind_param(
@@ -138,13 +147,12 @@ $stmt->bind_param(
     $token
 );
 
-if (!$stmt->execute()) {
-    $err = $stmt->error;
+try {
+    $stmt->execute();
     $stmt->close();
-    json_error('Database error while creating admin.', ['debug' => $err]);
+} catch (Throwable $e) {
+    json_error('Database error while creating admin.', ['debug' => $e->getMessage()]);
 }
-
-$stmt->close();
 
 // ========== send verification email ==========
 $verify_link = "https://divingrurip.com/verify_email.php?token={$token}&email=" . urlencode($email);
@@ -164,7 +172,7 @@ $message = "
 $mail = new PHPMailer(true);
 
 try {
-    // SMTP config (palitan mo ito ng actual na credentials mo)
+    // SMTP config (palitan ng actual mo)
     $mail->isSMTP();
     $mail->Host       = 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
@@ -190,7 +198,7 @@ try {
         'temp_password' => $tempPassword
     ]);
 } catch (Exception $e) {
-    // NOTE: account already created; just failed email
+    // Account created na, email lang ang pumalya
     echo json_encode([
         'success'       => true,
         'msg'           => 'Admin created, but failed to send verification email. Please check mail configuration.',
