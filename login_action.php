@@ -17,11 +17,13 @@ $password = $_POST['password'] ?? '';
 // Pull everything we need (incl. ban fields + session_version)
 $stmt = $conn->prepare("
   SELECT user_id, full_name, email_address, address, profile_pic, password, role, contact_number,
+         is_verified,
          account_status, banned_until, banned_reason, session_version, is_banned, banned_at, banned_by
   FROM user
   WHERE email_address = ?
   LIMIT 1
 ");
+
 $stmt->bind_param("s", $email);
 $stmt->execute();
 $res  = $stmt->get_result();
@@ -43,7 +45,18 @@ if (!$user || !password_verify($password, $user['password'])) {
   </script></body></html>";
   $conn->close(); exit;
 }
-
+/* ---------- Email verification gate (ALL ROLES) ---------- */
+if ((int)($user['is_verified'] ?? 0) !== 1) {
+  echo "<script>
+    Swal.fire({
+      icon: 'error',
+      title: 'Email Not Verified',
+      html: 'Please verify your email address first.<br>Check your inbox for the verification link.',
+      confirmButtonColor: '#1e8fa2'
+    }).then(()=>{ window.location='login.php'; });
+  </script></body></html>";
+  $conn->close(); exit;
+}
 /* ---------- Ban/Suspend gates (CLIENT only) ---------- */
 if (($user['role'] ?? '') === 'client') {
   $status = $user['account_status'] ?? 'active';
